@@ -1,0 +1,5438 @@
+Index: src/org/jruby/runtime/ReadonlyGlobalVariable.java
+===================================================================
+--- src/org/jruby/runtime/ReadonlyGlobalVariable.java	(revision 8091)
++++ src/org/jruby/runtime/ReadonlyGlobalVariable.java	(working copy)
+@@ -34,12 +34,12 @@
+ 
+ public class ReadonlyGlobalVariable extends GlobalVariable {
+ 
+-    public ReadonlyGlobalVariable(Ruby runtime, String name, IRubyObject value) {
+-        super(runtime, name, value);
++    public ReadonlyGlobalVariable(String name, IRubyObject value) {
++        super(name, value);
+     }
+ 
+     @Override
+     public IRubyObject set(IRubyObject value) {
+-        throw runtime.newNameError(name() + " is a read-only variable", name());
++        throw Ruby.getCurrentRuntime().newNameError(name() + " is a read-only variable", name());
+     }
+ }
+Index: src/org/jruby/runtime/GlobalVariable.java
+===================================================================
+--- src/org/jruby/runtime/GlobalVariable.java	(revision 8091)
++++ src/org/jruby/runtime/GlobalVariable.java	(working copy)
+@@ -39,7 +39,7 @@
+         private GlobalVariable other;
+ 
+         public Copy(Ruby runtime, String name, GlobalVariable other) {
+-            super(runtime, name, other.get());
++            super(name, other.get());
+             this.other = other;
+         }
+ 
+@@ -54,8 +54,6 @@
+         }
+     }
+ 
+-    protected final Ruby runtime;
+-
+     protected final String name;
+     private IRubyObject value;
+ 
+@@ -63,10 +61,8 @@
+         return "$" + name;
+     }
+ 
+-    public GlobalVariable(Ruby runtime, String name, IRubyObject value) {
++    public GlobalVariable(String name, IRubyObject value) {
+         assert name.startsWith("$");
+-
+-        this.runtime = runtime;
+         this.name = name;
+         this.value = value;
+     }
+Index: src/org/jruby/runtime/GlobalVariableAcessor.java
+===================================================================
+--- src/org/jruby/runtime/GlobalVariableAcessor.java	(revision 0)
++++ src/org/jruby/runtime/GlobalVariableAcessor.java	(revision 0)
+@@ -0,0 +1,24 @@
++package org.jruby.runtime;
++
++import org.jruby.runtime.IAccessor;
++import org.jruby.runtime.GlobalVariable;
++import org.jruby.runtime.builtin.IRubyObject;
++
++/**
++ * @author Fabio Kung
++*/
++public class GlobalVariableAcessor implements IAccessor {
++    private final GlobalVariable variable;
++
++    public GlobalVariableAcessor(GlobalVariable variable) {
++        this.variable = variable;
++    }
++
++    public IRubyObject getValue() {
++        return variable.get();
++    }
++
++    public IRubyObject setValue(IRubyObject newValue) {
++        return variable.set(newValue);
++    }
++}
+Index: src/org/jruby/ext/ffi/io/FileDescriptorIO.java
+===================================================================
+--- src/org/jruby/ext/ffi/io/FileDescriptorIO.java	(revision 8091)
++++ src/org/jruby/ext/ffi/io/FileDescriptorIO.java	(working copy)
+@@ -68,7 +68,7 @@
+         } catch (InvalidValueException ex) {
+             throw new RuntimeException(ex);
+         }
+-        openFile.setMainStream(new ChannelStream(getRuntime(),
++        openFile.setMainStream(new ChannelStream(
+                 new ChannelDescriptor(Factory.getInstance().newByteChannel(RubyNumeric.fix2int(fd)),
+                 getNewFileno(), modes, new java.io.FileDescriptor())));
+         openFile.setPipeStream(openFile.getMainStream());
+Index: src/org/jruby/ext/socket/RubyUNIXSocket.java
+===================================================================
+--- src/org/jruby/ext/socket/RubyUNIXSocket.java	(revision 8091)
++++ src/org/jruby/ext/socket/RubyUNIXSocket.java	(working copy)
+@@ -311,7 +311,7 @@
+ 
+     protected void init_sock(Ruby runtime) throws Exception {
+         ModeFlags modes = new ModeFlags(ModeFlags.RDWR);
+-        openFile.setMainStream(new ChannelStream(runtime, new ChannelDescriptor(new UnixDomainSocketChannel(fd), getNewFileno(), modes, new java.io.FileDescriptor())));
++        openFile.setMainStream(new ChannelStream(new ChannelDescriptor(new UnixDomainSocketChannel(fd), getNewFileno(), modes, new java.io.FileDescriptor())));
+         openFile.setPipeStream(openFile.getMainStream());
+         openFile.setMode(modes.getOpenFileFlags());
+         openFile.getMainStream().setSync(true);
+Index: src/org/jruby/internal/runtime/GlobalVariables.java
+===================================================================
+--- src/org/jruby/internal/runtime/GlobalVariables.java	(revision 8091)
++++ src/org/jruby/internal/runtime/GlobalVariables.java	(working copy)
+@@ -47,13 +47,8 @@
+  * @author jpetersen
+  */
+ public class GlobalVariables {
+-    private Ruby runtime;
+     private Map<String, GlobalVariable> globalVariables = new ConcurrentHashMap<String, GlobalVariable>();
+ 
+-    public GlobalVariables(Ruby runtime) {
+-        this.runtime = runtime;
+-    }
+-
+     public void define(String name, IAccessor accessor) {
+         assert name != null;
+         assert accessor != null;
+@@ -89,15 +84,16 @@
+         assert name.startsWith("$");
+         assert oldName.startsWith("$");
+ 
+-        if (runtime.getSafeLevel() >= 4) {
+-            throw runtime.newSecurityError("Insecure: can't alias global variable");
++        if (Ruby.getCurrentRuntime().getSafeLevel() >= 4) {
++            throw Ruby.getCurrentRuntime().newSecurityError("Insecure: can't alias global variable");
+         }
+ 
+         GlobalVariable oldVariable = createIfNotDefined(oldName);
+         GlobalVariable variable = (GlobalVariable)globalVariables.get(name);
+ 
+         if (variable != null && oldVariable != variable && variable.isTracing()) {
+-            throw new RaiseException(runtime, runtime.getRuntimeError(), "can't alias in tracer", false);
++            throw new RaiseException(Ruby.getCurrentRuntime(), Ruby.getCurrentRuntime().getRuntimeError(),
++                    "can't alias in tracer", false);
+         }
+ 
+         globalVariables.put(name, oldVariable);
+@@ -111,16 +107,16 @@
+ 	    if (variable != null) {
+ 	        return variable.getAccessor().getValue();
+ 	    }
+-		runtime.getWarnings().warning(ID.GLOBAL_NOT_INITIALIZED, "global variable `" + name + "' not initialized", name);
+-		return runtime.getNil();
++		Ruby.getCurrentRuntime().getWarnings().warning(ID.GLOBAL_NOT_INITIALIZED, "global variable `" + name + "' not initialized", name);
++		return Ruby.getCurrentRuntime().getNil();
+ 	}
+ 
+     public IRubyObject set(String name, IRubyObject value) {
+         assert name != null;
+         assert name.startsWith("$");
+ 
+-        if (runtime.getSafeLevel() >= 4) {
+-            throw runtime.newSecurityError("Insecure: can't change global variable value");
++        if (Ruby.getCurrentRuntime().getSafeLevel() >= 4) {
++            throw Ruby.getCurrentRuntime().newSecurityError("Insecure: can't change global variable value");
+         }
+ 
+         GlobalVariable variable = createIfNotDefined(name);
+@@ -165,7 +161,7 @@
+     private GlobalVariable createIfNotDefined(String name) {
+         GlobalVariable variable = (GlobalVariable)globalVariables.get(name);
+         if (variable == null) {
+-            variable = GlobalVariable.newUndefined(runtime, name);
++            variable = GlobalVariable.newUndefined(Ruby.getCurrentRuntime(), name);
+             globalVariables.put(name, variable);
+         }
+         return variable;
+Index: src/org/jruby/internal/runtime/RuntimeVariableAccessor.java
+===================================================================
+--- src/org/jruby/internal/runtime/RuntimeVariableAccessor.java	(revision 0)
++++ src/org/jruby/internal/runtime/RuntimeVariableAccessor.java	(revision 0)
+@@ -0,0 +1,32 @@
++package org.jruby.internal.runtime;
++
++import org.jruby.runtime.IAccessor;
++import org.jruby.runtime.builtin.IRubyObject;
++import org.jruby.Ruby;
++
++/**
++ * @author Fabio Kung
++ */
++public class RuntimeVariableAccessor implements IAccessor {
++    private final String name;
++
++    public RuntimeVariableAccessor(String name) {
++        this.name = name;
++    }
++
++    public RuntimeVariableAccessor(String name, IRubyObject value) {
++        this.name = name;
++        setValue(value);
++    }
++
++    public IRubyObject getValue() {
++        Ruby runtime = Ruby.getCurrentRuntime();
++        return runtime.getRuntimeVariable(this.name);
++    }
++
++    public IRubyObject setValue(IRubyObject newValue) {
++        Ruby runtime = Ruby.getCurrentRuntime();
++        runtime.setRuntimeVariable(this.name, newValue);
++        return newValue;
++    }
++}
+Index: src/org/jruby/RubyArgsFile.java
+===================================================================
+--- src/org/jruby/RubyArgsFile.java	(revision 8091)
++++ src/org/jruby/RubyArgsFile.java	(working copy)
+@@ -39,6 +39,7 @@
+ import org.jruby.runtime.ThreadContext;
+ import org.jruby.runtime.builtin.IRubyObject;
+ import org.jruby.util.ByteList;
++import org.jruby.internal.runtime.RuntimeVariableAccessor;
+ 
+ public class RubyArgsFile {
+     private static final class ArgsFileData {
+@@ -106,12 +107,13 @@
+ 
+         runtime.getEnumerable().extend_object(argsFile);
+         
+-        runtime.defineReadonlyVariable("$<", argsFile);
++        runtime.getGlobalVariables().defineReadonly("$<", new RuntimeVariableAccessor("$<", argsFile));
+         runtime.defineGlobalConstant("ARGF", argsFile);
+         
+         RubyClass argfClass = argsFile.getMetaClass();
+         argfClass.defineAnnotatedMethods(RubyArgsFile.class);
+-        runtime.defineReadonlyVariable("$FILENAME", runtime.newString("-"));
++        runtime.getGlobalVariables().defineReadonly("$FILENAME",
++                new RuntimeVariableAccessor("$FILENAME", runtime.newString("-")));
+     }
+ 
+     @JRubyMethod(name = {"fileno", "to_i"})
+Index: src/org/jruby/RubyFile.java
+===================================================================
+--- src/org/jruby/RubyFile.java	(revision 8091)
++++ src/org/jruby/RubyFile.java	(working copy)
+@@ -165,7 +165,7 @@
+         super(runtime, runtime.getFile());
+         this.path = path;
+         try {
+-            this.openFile.setMainStream(new ChannelStream(runtime, new ChannelDescriptor(Channels.newChannel(in), getNewFileno(), new FileDescriptor())));
++            this.openFile.setMainStream(new ChannelStream(new ChannelDescriptor(Channels.newChannel(in), getNewFileno(), new FileDescriptor())));
+         } catch (InvalidValueException ex) {
+             throw runtime.newErrnoEINVALError();
+         }
+Index: src/org/jruby/Ruby.java
+===================================================================
+--- src/org/jruby/Ruby.java	(revision 8091)
++++ src/org/jruby/Ruby.java	(working copy)
+@@ -110,6 +110,7 @@
+ import org.jruby.runtime.ObjectSpace;
+ import org.jruby.runtime.RubyEvent;
+ import org.jruby.runtime.ThreadContext;
++import org.jruby.runtime.GlobalVariableAcessor;
+ import org.jruby.runtime.builtin.IRubyObject;
+ import org.jruby.runtime.encoding.EncodingService;
+ import org.jruby.runtime.load.Library;
+@@ -122,6 +123,7 @@
+ import org.jruby.util.JRubyClassLoader;
+ import org.jruby.util.JavaNameMangler;
+ import org.jruby.util.KCode;
++import org.jruby.util.RuntimeContainer;
+ import org.jruby.util.SafePropertyAccessor;
+ import org.jruby.util.collections.WeakHashSet;
+ import org.jruby.util.io.ChannelDescriptor;
+@@ -136,7 +138,7 @@
+  * multiple instances of each class. This means that in multi-runtime mode
+  * (or really, multi-VM mode, where each JRuby instance is a ruby "VM"), objects
+  * generally can't be transported across runtimes without marshaling.
+- * 
++ *
+  * This class roots everything that makes the JRuby runtime function, and
+  * provides a number of utility methods for constructing global types and
+  * accessing global runtime structures.
+@@ -183,16 +185,27 @@
+         config.setError(err);
+         return newInstance(config);
+     }
+-    
++
++    public static Ruby getCurrentRuntime() {
++        JRubyClassLoader loader = (JRubyClassLoader) Thread.currentThread().getContextClassLoader();
++        while (!(loader instanceof RuntimeContainer)) {
++            loader = (JRubyClassLoader) loader.getParent();
++        }
++        return ((RuntimeContainer) loader).getRuntime();
++    }
++
+     /**
+      * Create and initialize a new JRuby runtime. The properties of the
+      * specified RubyInstanceConfig will be used to determine various JRuby
+      * runtime characteristics.
+-     * 
++     *
+      * @param config The configuration to use for the new instance
+      * @see org.jruby.RubyInstanceConfig
+      */
+     private Ruby(RubyInstanceConfig config) {
++        Thread currentThread = Thread.currentThread();
++        currentThread.setContextClassLoader(new RuntimeContainer(currentThread.getContextClassLoader(), this));
++
+         this.config             = config;
+         this.threadService      = new ThreadService(this);
+         if(config.isSamplingEnabled()) {
+@@ -209,18 +222,18 @@
+         this.beanManager        = new BeanManager(this, config.isManagementEnabled());
+         this.jitCompiler        = new JITCompiler(this);
+         this.parserStats        = new ParserStats(this);
+-        
++
+         this.beanManager.register(new Config(this));
+         this.beanManager.register(parserStats);
+         this.beanManager.register(new ClassCache(this));
+     }
+-    
++
+     /**
+      * Evaluates a script under the current scope (perhaps the top-level
+      * scope) and returns the result (generally the last value calculated).
+      * This version goes straight into the interpreter, bypassing compilation
+      * and runtime preparation typical to normal script runs.
+-     * 
++     *
+      * @param script The scriptlet to run
+      * @returns The result of the eval
+      */
+@@ -229,7 +242,7 @@
+         DynamicScope currentScope = context.getCurrentScope();
+         ManyVarsDynamicScope newScope = new ManyVarsDynamicScope(new EvalStaticScope(currentScope.getStaticScope()), currentScope);
+         Node node = parseEval(script, "<script>", newScope, 0);
+-        
++
+         try {
+             context.preEvalScriptlet(newScope);
+             return node.interpret(this, context, context.getFrameSelf(), Block.NULL_BLOCK);
+@@ -243,20 +256,20 @@
+             context.postEvalScriptlet();
+         }
+     }
+-    
++
+     /**
+-     * Parse and execute the specified script 
++     * Parse and execute the specified script
+      * This differs from the other methods in that it accepts a string-based script and
+      * parses and runs it as though it were loaded at a command-line. This is the preferred
+      * way to start up a new script when calling directly into the Ruby object (which is
+      * generally *dis*couraged.
+-     * 
++     *
+      * @param script The contents of the script to run as a normal, root script
+      * @return The last value of the script
+      */
+     public IRubyObject executeScript(String script, String filename) {
+         byte[] bytes;
+-        
++
+         try {
+             bytes = script.getBytes(KCode.NONE.getKCode());
+         } catch (UnsupportedEncodingException e) {
+@@ -265,7 +278,7 @@
+ 
+         Node node = parseInline(new ByteArrayInputStream(bytes), filename, null);
+         ThreadContext context = getCurrentContext();
+-        
++
+         String oldFile = context.getFile();
+         int oldLine = context.getLine();
+         try {
+@@ -277,22 +290,22 @@
+             context.setLine(oldLine);
+         }
+     }
+-    
++
+     /**
+      * Run the script contained in the specified input stream, using the
+      * specified filename as the name of the script being executed. The stream
+      * will be read fully before being parsed and executed. The given filename
+      * will be used for the ruby $PROGRAM_NAME and $0 global variables in this
+      * runtime.
+-     * 
++     *
+      * This method is intended to be called once per runtime, generally from
+      * Main or from main-like top-level entry points.
+-     * 
++     *
+      * As part of executing the script loaded from the input stream, various
+      * RubyInstanceConfig properties will be used to determine whether to
+      * compile the script before execution or run with various wrappers (for
+      * looping, printing, and so on, see jruby -help).
+-     * 
++     *
+      * @param inputStream The InputStream from which to read the script contents
+      * @param filename The filename to use when parsing, and for $PROGRAM_NAME
+      * and $0 ruby global variables.
+@@ -314,7 +327,7 @@
+             getGlobalVariables().set("$" + entry.getKey().toString(), varvalue);
+         }
+ 
+-        
++
+         if(config.isYARVEnabled()) {
+             if (config.isShowBytecode()) System.err.print("error: bytecode printing only works with JVM bytecode");
+             new YARVCompiledRunner(this, inputStream, filename).run();
+@@ -350,7 +363,7 @@
+      * is used to verify that the script syntax is valid, for jruby -c. The
+      * current scope (generally the top-level scope) is used as the parent
+      * scope for parsing.
+-     * 
++     *
+      * @param inputStream The input stream from which to read the script
+      * @param filename The filename to use for parsing
+      * @returns The root node of the parsed script
+@@ -362,12 +375,12 @@
+             return parseFile(inputStream, filename, getCurrentContext().getCurrentScope());
+         }
+     }
+-    
++
+     /**
+      * Run the given script with a "while gets; end" loop wrapped around it.
+      * This is primarily used for the -n command-line flag, to allow writing
+      * a short script that processes input lines using the specified code.
+-     * 
++     *
+      * @param scriptNode The root node of the script to execute
+      * @param printing Whether $_ should be printed after each loop (as in the
+      * -p command-line flag)
+@@ -380,7 +393,7 @@
+      */
+     public IRubyObject runWithGetsLoop(Node scriptNode, boolean printing, boolean processLineEnds, boolean split, boolean yarvCompile) {
+         ThreadContext context = getCurrentContext();
+-        
++
+         Script script = null;
+         YARVCompiledRunner runner = null;
+         boolean compile = getInstanceConfig().getCompileMode().shouldPrecompileCLI();
+@@ -393,22 +406,22 @@
+         } else if (yarvCompile) {
+             runner = tryCompileYarv(scriptNode);
+         }
+-        
++
+         if (processLineEnds) {
+             getGlobalVariables().set("$\\", getGlobalVariables().get("$/"));
+         }
+-        
++
+         while (RubyKernel.gets(context, getTopSelf(), IRubyObject.NULL_ARRAY).isTrue()) {
+             loop: while (true) { // Used for the 'redo' command
+                 try {
+                     if (processLineEnds) {
+                         getGlobalVariables().get("$_").callMethod(context, "chop!");
+                     }
+-                    
++
+                     if (split) {
+                         getGlobalVariables().set("$F", getGlobalVariables().get("$_").callMethod(context, "split"));
+                     }
+-                    
++
+                     if (script != null) {
+                         runScript(script);
+                     } else if (runner != null) {
+@@ -416,7 +429,7 @@
+                     } else {
+                         runInterpreter(scriptNode);
+                     }
+-                    
++
+                     if (printing) RubyKernel.print(context, getKernel(), new IRubyObject[] {getGlobalVariables().get("$_")});
+                     break loop;
+                 } catch (JumpException.RedoJump rj) {
+@@ -430,14 +443,14 @@
+                 }
+             }
+         }
+-        
++
+         return getNil();
+     }
+-    
++
+     /**
+      * Run the specified script without any of the loop-processing wrapper
+      * code.
+-     * 
++     *
+      * @param scriptNode The root node of the script to be executed
+      * @param yarvCompile Whether to compile the script to YARV (Ruby 1.9)
+      * bytecode before execution
+@@ -456,7 +469,7 @@
+                 return getNil();
+             }
+         }
+-        
++
+         if (script != null) {
+             if (config.isShowBytecode()) {
+                 return nilObject;
+@@ -470,11 +483,11 @@
+             return runInterpreter(scriptNode);
+         }
+     }
+-    
++
+     private Script tryCompile(Node node) {
+         return tryCompile(node, new JRubyClassLoader(getJRubyClassLoader()));
+     }
+-    
++
+     private Script tryCompile(Node node, JRubyClassLoader classLoader) {
+         Script script = null;
+         try {
+@@ -533,10 +546,10 @@
+                 System.err.println("Error, could not compile; pass -d or -J-Djruby.jit.logging.verbose=true for more details");
+             }
+         }
+-        
++
+         return script;
+     }
+-    
++
+     private YARVCompiledRunner tryCompileYarv(Node node) {
+         try {
+             StandardYARVCompiler compiler = new StandardYARVCompiler(this);
+@@ -553,17 +566,17 @@
+             return null;
+         }
+     }
+-    
++
+     private IRubyObject runScript(Script script) {
+         ThreadContext context = getCurrentContext();
+-        
++
+         try {
+             return script.load(context, context.getFrameSelf(), IRubyObject.NULL_ARRAY, Block.NULL_BLOCK);
+         } catch (JumpException.ReturnJump rj) {
+             return (IRubyObject) rj.getValue();
+         }
+     }
+-    
++
+     private IRubyObject runYarv(YARVCompiledRunner runner) {
+         try {
+             return runner.run();
+@@ -571,12 +584,12 @@
+             return (IRubyObject) rj.getValue();
+         }
+     }
+-    
++
+     private IRubyObject runInterpreter(Node scriptNode) {
+         ThreadContext context = getCurrentContext();
+-        
++
+         assert scriptNode != null : "scriptNode is not null";
+-        
++
+         try {
+             return scriptNode.interpret(this, context, getTopSelf(), Block.NULL_BLOCK);
+         } catch (JumpException.ReturnJump rj) {
+@@ -587,11 +600,11 @@
+     public Parser getParser() {
+         return parser;
+     }
+-    
++
+     public BeanManager getBeanManager() {
+         return beanManager;
+     }
+-    
++
+     public JITCompiler getJITCompiler() {
+         return jitCompiler;
+     }
+@@ -602,16 +615,16 @@
+     public static Ruby getDefaultInstance() {
+         return newInstance();
+     }
+-    
++
+     @Deprecated
+     public static Ruby getCurrentInstance() {
+         return null;
+     }
+-    
++
+     @Deprecated
+     public static void setCurrentInstance(Ruby runtime) {
+     }
+-    
++
+     public int allocSymbolId() {
+         return symbolLastId.incrementAndGet();
+     }
+@@ -621,7 +634,7 @@
+ 
+     /**
+      * Retrieve the module with the given name from the Object namespace.
+-     * 
++     *
+      * @param name The name of the module
+      * @return The module or null if not found
+      */
+@@ -633,7 +646,7 @@
+      * Retrieve the module with the given name from the Object namespace. The
+      * module name must be an interned string, but this method will be faster
+      * than the non-interned version.
+-     * 
++     *
+      * @param internedName The name of the module; <em>must</em> be an interned String
+      * @return The module or null if not found
+      */
+@@ -641,7 +654,7 @@
+         return (RubyModule) objectClass.fastGetConstantAt(internedName);
+     }
+ 
+-    /** 
++    /**
+      * Retrieve the class with the given name from the Object namespace.
+      *
+      * @param name The name of the class
+@@ -655,7 +668,7 @@
+      * Retrieve the class with the given name from the Object namespace. The
+      * module name must be an interned string, but this method will be faster
+      * than the non-interned version.
+-     * 
++     *
+      * @param internedName the name of the class; <em>must</em> be an interned String!
+      * @return
+      */
+@@ -663,7 +676,7 @@
+         return objectClass.fastGetClass(internedName);
+     }
+ 
+-    /** 
++    /**
+      * Define a new class under the Object namespace. Roughly equivalent to
+      * rb_define_class in MRI.
+      *
+@@ -677,7 +690,7 @@
+         return defineClassUnder(name, superClass, allocator, objectClass);
+     }
+ 
+-    /** 
++    /**
+      * A variation of defineClass that allows passing in an array of subplementary
+      * call sites for improving dynamic invocation performance.
+      *
+@@ -694,7 +707,7 @@
+     /**
+      * Define a new class with the given name under the given module or class
+      * namespace. Roughly equivalent to rb_define_class_under in MRI.
+-     * 
++     *
+      * If the name specified is already bound, its value will be returned if:
+      * * It is a class
+      * * No new superclass is being defined
+@@ -738,23 +751,23 @@
+             }
+             return klazz;
+         }
+-        
++
+         boolean parentIsObject = parent == objectClass;
+ 
+         if (superClass == null) {
+-            String className = parentIsObject ? name : parent.getName() + "::" + name;  
++            String className = parentIsObject ? name : parent.getName() + "::" + name;
+             warnings.warn(ID.NO_SUPER_CLASS, "no super class for `" + className + "', Object assumed", className);
+-            
++
+             superClass = objectClass;
+         }
+ 
+         return RubyClass.newClass(this, superClass, name, allocator, parent, !parentIsObject, callSites);
+     }
+ 
+-    /** 
++    /**
+      * Define a new module under the Object namespace. Roughly equivalent to
+      * rb_define_module in MRI.
+-     * 
++     *
+      * @param name The name of the new module
+      * @returns The new module
+      */
+@@ -765,7 +778,7 @@
+     /**
+      * Define a new module with the given name under the given module or
+      * class namespace. Roughly equivalent to rb_define_module_under in MRI.
+-     * 
++     *
+      * @param name The name of the new module
+      * @param parent The class or module namespace under which to define the
+      * module
+@@ -773,12 +786,12 @@
+      */
+     public RubyModule defineModuleUnder(String name, RubyModule parent) {
+         IRubyObject moduleObj = parent.getConstantAt(name);
+-        
++
+         boolean parentIsObject = parent == objectClass;
+ 
+         if (moduleObj != null ) {
+             if (moduleObj.isModule()) return (RubyModule)moduleObj;
+-            
++
+             if (parentIsObject) {
+                 throw newTypeError(moduleObj.getMetaClass().getName() + " is not a module");
+             } else {
+@@ -792,7 +805,7 @@
+     /**
+      * From Object, retrieve the named module. If it doesn't exist a
+      * new module is created.
+-     * 
++     *
+      * @param name The name of the module
+      * @returns The existing or new module
+      */
+@@ -810,9 +823,9 @@
+     }
+ 
+ 
+-    /** 
++    /**
+      * Retrieve the current safe level.
+-     * 
++     *
+      * @see org.jruby.Ruby#setSaveLevel
+      */
+     public int getSafeLevel() {
+@@ -820,15 +833,15 @@
+     }
+ 
+ 
+-    /** 
++    /**
+      * Set the current safe level:
+-     * 
++     *
+      * 0 - strings from streams/environment/ARGV are tainted (default)
+      * 1 - no dangerous operation by tainted value
+      * 2 - process/file operations prohibited
+      * 3 - all generated objects are tainted
+      * 4 - no global (non-tainted) variable modification/no direct output
+-     * 
++     *
+      * The safe level is set using $SAFE in Ruby code. It is not particularly
+      * well supported in JRuby.
+     */
+@@ -877,7 +890,7 @@
+     public boolean isClassDefined(String name) {
+         return getModule(name) != null;
+     }
+-    
++
+     /**
+      * A ThreadFactory for when we're using pooled threads; we want to create
+      * the threads with daemon = true so they don't keep us from shutting down.
+@@ -886,12 +899,12 @@
+         public Thread newThread(Runnable runnable) {
+             Thread thread = new Thread(runnable);
+             thread.setDaemon(true);
+-            
++
+             return thread;
+         }
+     }
+ 
+-    /** 
++    /**
+      * This method is called immediately after constructing the Ruby instance.
+      * The main thread is prepared for execution, all core classes and libraries
+      * are initialized, and any libraries required on the command line are
+@@ -902,12 +915,12 @@
+         ThreadContext tc = getCurrentContext();
+ 
+         safeLevel = config.getSafeLevel();
+-        
++
+         // Construct key services
+         loadService = config.createLoadService(this);
+         posix = POSIXFactory.getPOSIX(new JRubyPOSIXHandler(this), RubyInstanceConfig.nativeEnabled);
+         javaSupport = new JavaSupport(this);
+-        
++
+         if (RubyInstanceConfig.POOLING_ENABLED) {
+             Executors.newCachedThreadPool();
+             executor = new ThreadPoolExecutor(
+@@ -918,7 +931,7 @@
+                     new SynchronousQueue<Runnable>(),
+                     new DaemonThreadFactory());
+         }
+-        
++
+         // initialize the root of the class hierarchy completely
+         initRoot();
+ 
+@@ -927,11 +940,11 @@
+ 
+         // Initialize all the core classes
+         bootstrap();
+-        
++
+         // Initialize the "dummy" class used as a marker
+         dummyClass = new RubyClass(this, classClass);
+         dummyClass.freeze(tc);
+-        
++
+         // Create global constants and variables
+         RubyGlobal.createGlobals(tc, this);
+ 
+@@ -940,7 +953,7 @@
+ 
+         // initialize builtin libraries
+         initBuiltins();
+-        
++
+         // Require in all libraries specified on command line
+         for (String scriptName : config.requiredLibraries()) {
+             RubyKernel.require(getTopSelf(), newString(scriptName), Block.NULL_BLOCK);
+@@ -969,8 +982,8 @@
+ 
+         RubyObject.createObjectClass(this, objectClass);
+         RubyModule.createModuleClass(this, moduleClass);
+-        RubyClass.createClassClass(this, classClass);
+-        
++        RubyClass.createClassClass(classClass);
++
+         // set constants now that they're initialized
+         objectClass.setConstant("Object", objectClass);
+         objectClass.setConstant("Class", classClass);
+@@ -1144,10 +1157,10 @@
+         scriptError = defineClassIfAllowed("ScriptError", exceptionClass);
+         rangeError = defineClassIfAllowed("RangeError", standardError);
+         signalException = defineClassIfAllowed("SignalException", exceptionClass);
+-        
++
+         if (profile.allowClass("NameError")) {
+             nameError = RubyNameError.createNameErrorClass(this, standardError);
+-            nameErrorMessage = RubyNameError.createNameErrorMessageClass(this, nameError);            
++            nameErrorMessage = RubyNameError.createNameErrorMessageClass(this, nameError);
+         }
+         if (profile.allowClass("NoMethodError")) {
+             noMethodError = RubyNoMethodError.createNoMethodErrorClass(this, nameError);
+@@ -1185,14 +1198,14 @@
+ 
+         if (config.getCompatVersion() == CompatVersion.RUBY1_9) {
+             if (profile.allowClass("EncodingError")) {
+-                encodingError = defineClass("EncodingError", standardError, standardError.getAllocator()); 
++                encodingError = defineClass("EncodingError", standardError, standardError.getAllocator());
+                 encodingCompatibilityError = defineClassUnder("CompatibilityError", encodingError, encodingError.getAllocator(), encodingClass);
+             }
+         }
+ 
+         initErrno();
+     }
+-    
++
+     private RubyClass defineClassIfAllowed(String name, RubyClass superClass) {
+ 	// TODO: should probably apply the null object pattern for a
+ 	// non-allowed class, rather than null
+@@ -1237,9 +1250,9 @@
+     private void initBuiltins() {
+         addLazyBuiltin("java.rb", "java", "org.jruby.javasupport.Java");
+         addLazyBuiltin("jruby.rb", "jruby", "org.jruby.libraries.JRubyLibrary");
+-        
++
+         addLazyBuiltin("minijava.rb", "minijava", "org.jruby.java.MiniJava");
+-        
++
+         addLazyBuiltin("jruby/ext.rb", "jruby/ext", "org.jruby.RubyJRuby$ExtLibrary");
+         addLazyBuiltin("jruby/core_ext.rb", "jruby/ext", "org.jruby.RubyJRuby$CoreExtLibrary");
+         addLazyBuiltin("jruby/type.rb", "jruby/type", "org.jruby.RubyJRuby$TypeLibrary");
+@@ -1270,22 +1283,22 @@
+         if(RubyInstanceConfig.NATIVE_NET_PROTOCOL) {
+             addLazyBuiltin("net/protocol.rb", "net/protocol", "org.jruby.libraries.NetProtocolBufferedIOLibrary");
+         }
+-        
++
+         if (config.getCompatVersion() == CompatVersion.RUBY1_9) {
+             addLazyBuiltin("fiber.so", "fiber", "org.jruby.libraries.FiberLibrary");
+         }
+-        
++
+         addBuiltinIfAllowed("openssl.so", new Library() {
+             public void load(Ruby runtime, boolean wrap) throws IOException {
+                 runtime.getLoadService().require("jruby/openssl/stub");
+             }
+         });
+-        
++
+         String[] builtins = {"fcntl", "yaml", "yaml/syck", "jsignal" };
+         for (String library : builtins) {
+             addBuiltinIfAllowed(library + ".rb", new BuiltinScript(library));
+         }
+-        
++
+         RubyKernel.autoload(topSelf, newSymbol("Java"), newString("java"));
+ 
+         if (config.getCompatVersion() == CompatVersion.RUBY1_9) {
+@@ -1334,11 +1347,11 @@
+     public String getCurrentDirectory() {
+         return currentDirectory;
+     }
+-    
++
+     public RubyModule getEtc() {
+         return etcModule;
+     }
+-    
++
+     public void setEtc(RubyModule etcModule) {
+         this.etcModule = etcModule;
+     }
+@@ -1354,14 +1367,14 @@
+     public RubyClass getClassClass() {
+         return classClass;
+     }
+-    
++
+     public RubyModule getKernel() {
+         return kernelModule;
+     }
+     void setKernel(RubyModule kernelModule) {
+         this.kernelModule = kernelModule;
+     }
+-    
++
+     public RubyClass getDummy() {
+         return dummyClass;
+     }
+@@ -1371,14 +1384,14 @@
+     }
+     void setComparable(RubyModule comparableModule) {
+         this.comparableModule = comparableModule;
+-    }    
++    }
+ 
+     public RubyClass getNumeric() {
+         return numericClass;
+     }
+     void setNumeric(RubyClass numericClass) {
+         this.numericClass = numericClass;
+-    }    
++    }
+ 
+     public RubyClass getFloat() {
+         return floatClass;
+@@ -1386,14 +1399,14 @@
+     void setFloat(RubyClass floatClass) {
+         this.floatClass = floatClass;
+     }
+-    
++
+     public RubyClass getInteger() {
+         return integerClass;
+     }
+     void setInteger(RubyClass integerClass) {
+         this.integerClass = integerClass;
+-    }    
+-    
++    }
++
+     public RubyClass getFixnum() {
+         return fixnumClass;
+     }
+@@ -1452,7 +1465,7 @@
+ 
+     public RubyClass getArray() {
+         return arrayClass;
+-    }    
++    }
+     void setArray(RubyClass arrayClass) {
+         this.arrayClass = arrayClass;
+     }
+@@ -1532,77 +1545,77 @@
+     }
+     void setMethod(RubyClass methodClass) {
+         this.methodClass = methodClass;
+-    }    
++    }
+ 
+     public RubyClass getUnboundMethod() {
+         return unboundMethodClass;
+     }
+     void setUnboundMethod(RubyClass unboundMethodClass) {
+         this.unboundMethodClass = unboundMethodClass;
+-    }    
++    }
+ 
+     public RubyClass getMatchData() {
+         return matchDataClass;
+     }
+     void setMatchData(RubyClass matchDataClass) {
+         this.matchDataClass = matchDataClass;
+-    }    
++    }
+ 
+     public RubyClass getRegexp() {
+         return regexpClass;
+     }
+     void setRegexp(RubyClass regexpClass) {
+         this.regexpClass = regexpClass;
+-    }    
++    }
+ 
+     public RubyClass getTime() {
+         return timeClass;
+     }
+     void setTime(RubyClass timeClass) {
+         this.timeClass = timeClass;
+-    }    
++    }
+ 
+     public RubyModule getMath() {
+         return mathModule;
+     }
+     void setMath(RubyModule mathModule) {
+         this.mathModule = mathModule;
+-    }    
++    }
+ 
+     public RubyModule getMarshal() {
+         return marshalModule;
+     }
+     void setMarshal(RubyModule marshalModule) {
+         this.marshalModule = marshalModule;
+-    }    
++    }
+ 
+     public RubyClass getBignum() {
+         return bignumClass;
+     }
+     void setBignum(RubyClass bignumClass) {
+         this.bignumClass = bignumClass;
+-    }    
++    }
+ 
+     public RubyClass getDir() {
+         return dirClass;
+     }
+     void setDir(RubyClass dirClass) {
+         this.dirClass = dirClass;
+-    }    
++    }
+ 
+     public RubyClass getFile() {
+         return fileClass;
+     }
+     void setFile(RubyClass fileClass) {
+         this.fileClass = fileClass;
+-    }    
++    }
+ 
+     public RubyClass getFileStat() {
+         return fileStatClass;
+     }
+     void setFileStat(RubyClass fileStatClass) {
+         this.fileStatClass = fileStatClass;
+-    }    
++    }
+ 
+     public RubyModule getFileTest() {
+         return fileTestModule;
+@@ -1610,20 +1623,20 @@
+     void setFileTest(RubyModule fileTestModule) {
+         this.fileTestModule = fileTestModule;
+     }
+-    
++
+     public RubyClass getIO() {
+         return ioClass;
+     }
+     void setIO(RubyClass ioClass) {
+         this.ioClass = ioClass;
+-    }    
++    }
+ 
+     public RubyClass getThread() {
+         return threadClass;
+     }
+     void setThread(RubyClass threadClass) {
+         this.threadClass = threadClass;
+-    }    
++    }
+ 
+     public RubyClass getThreadGroup() {
+         return threadGroupClass;
+@@ -1631,7 +1644,7 @@
+     void setThreadGroup(RubyClass threadGroupClass) {
+         this.threadGroupClass = threadGroupClass;
+     }
+-    
++
+     public RubyThreadGroup getDefaultThreadGroup() {
+         return defaultThreadGroup;
+     }
+@@ -1644,14 +1657,14 @@
+     }
+     void setContinuation(RubyClass continuationClass) {
+         this.continuationClass = continuationClass;
+-    }    
++    }
+ 
+     public RubyClass getStructClass() {
+         return structClass;
+     }
+     void setStructClass(RubyClass structClass) {
+         this.structClass = structClass;
+-    }    
++    }
+ 
+     public IRubyObject getTmsStruct() {
+         return tmsStruct;
+@@ -1659,7 +1672,7 @@
+     void setTmsStruct(RubyClass tmsStruct) {
+         this.tmsStruct = tmsStruct;
+     }
+-    
++
+     public IRubyObject getPasswdStruct() {
+         return passwdStruct;
+     }
+@@ -1679,43 +1692,43 @@
+     }
+     void setGC(RubyModule gcModule) {
+         this.gcModule = gcModule;
+-    }    
++    }
+ 
+     public RubyModule getObjectSpaceModule() {
+         return objectSpaceModule;
+     }
+     void setObjectSpaceModule(RubyModule objectSpaceModule) {
+         this.objectSpaceModule = objectSpaceModule;
+-    }    
++    }
+ 
+     public RubyModule getProcess() {
+         return processModule;
+     }
+     void setProcess(RubyModule processModule) {
+         this.processModule = processModule;
+-    }    
++    }
+ 
+     public RubyClass getProcStatus() {
+-        return procStatusClass; 
++        return procStatusClass;
+     }
+     void setProcStatus(RubyClass procStatusClass) {
+         this.procStatusClass = procStatusClass;
+     }
+-    
++
+     public RubyModule getProcUID() {
+         return procUIDModule;
+     }
+     void setProcUID(RubyModule procUIDModule) {
+         this.procUIDModule = procUIDModule;
+     }
+-    
++
+     public RubyModule getProcGID() {
+         return procGIDModule;
+     }
+     void setProcGID(RubyModule procGIDModule) {
+         this.procGIDModule = procGIDModule;
+     }
+-    
++
+     public RubyModule getProcSysModule() {
+         return procSysModule;
+     }
+@@ -1780,11 +1793,11 @@
+     public RubyClass getFatal() {
+         return fatal;
+     }
+-    
++
+     public RubyClass getInterrupt() {
+         return interrupt;
+     }
+-    
++
+     public RubyClass getTypeError() {
+         return typeError;
+     }
+@@ -1796,7 +1809,7 @@
+     public RubyClass getIndexError() {
+         return indexError;
+     }
+-    
++
+     public RubyClass getSyntaxError() {
+         return syntaxError;
+     }
+@@ -1804,11 +1817,11 @@
+     public RubyClass getStandardError() {
+         return standardError;
+     }
+-    
++
+     public RubyClass getRuntimeError() {
+         return runtimeError;
+     }
+-    
++
+     public RubyClass getIOError() {
+         return ioError;
+     }
+@@ -1909,31 +1922,23 @@
+         if (loader == null) {
+             loader = ClassLoader.getSystemClassLoader();
+         }
+-        
++
+         return loader;
+     }
+ 
+     public synchronized JRubyClassLoader getJRubyClassLoader() {
+         // FIXME: Get rid of laziness and handle restricted access elsewhere
+         if (!Ruby.isSecurityRestricted() && jrubyClassLoader == null) {
+-            jrubyClassLoader = new JRubyClassLoader(config.getLoader());
++            jrubyClassLoader = new RuntimeContainer(config.getLoader(), this);
+         }
+-        
++
+         return jrubyClassLoader;
+     }
+ 
+     /** Defines a global variable
+      */
+     public void defineVariable(final GlobalVariable variable) {
+-        globalVariables.define(variable.name(), new IAccessor() {
+-            public IRubyObject getValue() {
+-                return variable.get();
+-            }
+-
+-            public IRubyObject setValue(IRubyObject newValue) {
+-                return variable.set(newValue);
+-            }
+-        });
++        globalVariables.define(variable.name(), new GlobalVariableAcessor(variable));
+     }
+ 
+     /** defines a readonly global variable
+@@ -1942,7 +1947,7 @@
+     public void defineReadonlyVariable(String name, IRubyObject value) {
+         globalVariables.defineReadonly(name, new ValueAccessor(value));
+     }
+-    
++
+     public Node parseFile(InputStream in, String file, DynamicScope scope) {
+         if (parserStats != null) parserStats.addLoadParse();
+         return parser.parse(file, in, scope, new ParserConfiguration(0, false, false, true));
+@@ -1955,42 +1960,42 @@
+ 
+     public Node parseEval(String content, String file, DynamicScope scope, int lineNumber) {
+         byte[] bytes;
+-        
++
+         try {
+             bytes = content.getBytes(KCode.NONE.getKCode());
+         } catch (UnsupportedEncodingException e) {
+             bytes = content.getBytes();
+         }
+-        
++
+         if (parserStats != null) parserStats.addEvalParse();
+-        return parser.parse(file, new ByteArrayInputStream(bytes), scope, 
++        return parser.parse(file, new ByteArrayInputStream(bytes), scope,
+                 new ParserConfiguration(lineNumber, false));
+     }
+ 
+     @Deprecated
+-    public Node parse(String content, String file, DynamicScope scope, int lineNumber, 
++    public Node parse(String content, String file, DynamicScope scope, int lineNumber,
+             boolean extraPositionInformation) {
+         byte[] bytes;
+-        
++
+         try {
+             bytes = content.getBytes(KCode.NONE.getKCode());
+         } catch (UnsupportedEncodingException e) {
+             bytes = content.getBytes();
+         }
+ 
+-        return parser.parse(file, new ByteArrayInputStream(bytes), scope, 
++        return parser.parse(file, new ByteArrayInputStream(bytes), scope,
+                 new ParserConfiguration(lineNumber, extraPositionInformation, false));
+     }
+-    
++
+     public Node parseEval(ByteList content, String file, DynamicScope scope, int lineNumber) {
+         if (parserStats != null) parserStats.addEvalParse();
+         return parser.parse(file, content, scope, new ParserConfiguration(lineNumber, false));
+     }
+ 
+-    public Node parse(ByteList content, String file, DynamicScope scope, int lineNumber, 
++    public Node parse(ByteList content, String file, DynamicScope scope, int lineNumber,
+             boolean extraPositionInformation) {
+         if (parserStats != null) parserStats.addJRubyModuleParse();
+-        return parser.parse(file, content, scope, 
++        return parser.parse(file, content, scope,
+                 new ParserConfiguration(lineNumber, extraPositionInformation, false));
+     }
+ 
+@@ -2147,12 +2152,12 @@
+             }
+         }
+     }
+-    
++
+     public void loadFile(String scriptName, InputStream in, boolean wrap) {
+         IRubyObject self = wrap ? TopSelfFactory.createTopSelf(this) : getTopSelf();
+         ThreadContext context = getCurrentContext();
+         String file = context.getFile();
+-        
++
+         try {
+             secure(4); /* should alter global state */
+ 
+@@ -2167,20 +2172,20 @@
+             context.setFile(file);
+         }
+     }
+-    
++
+     public void compileAndLoadFile(String filename, InputStream in, boolean wrap) {
+         IRubyObject self = wrap ? TopSelfFactory.createTopSelf(this) : getTopSelf();
+         ThreadContext context = getCurrentContext();
+         String file = context.getFile();
+-        
++
+         try {
+             secure(4); /* should alter global state */
+ 
+             context.setFile(filename);
+             context.preNodeEval(objectClass, self, filename);
+-            
++
+             Node scriptNode = parseFile(in, filename, null);
+-            
++
+             Script script = tryCompile(scriptNode, new JRubyClassLoader(jrubyClassLoader));
+             if (script == null) {
+                 System.err.println("Error, could not compile; pass -J-Djruby.jit.logging.verbose=true for more details");
+@@ -2203,7 +2208,7 @@
+             secure(4); /* should alter global state */
+ 
+             context.preNodeEval(objectClass, self);
+-            
++
+             script.load(context, self, IRubyObject.NULL_ARRAY, Block.NULL_BLOCK);
+         } catch (JumpException.ReturnJump rj) {
+             return;
+@@ -2214,16 +2219,16 @@
+ 
+     public class CallTraceFuncHook extends EventHook {
+         private RubyProc traceFunc;
+-        
++
+         public void setTraceFunc(RubyProc traceFunc) {
+             this.traceFunc = traceFunc;
+         }
+-        
++
+         public void eventHandler(ThreadContext context, String eventName, String file, int line, String name, IRubyObject type) {
+             if (!context.isWithinTrace()) {
+                 if (file == null) file = "(ruby)";
+                 if (type == null) type = getFalse();
+-                
++
+                 RubyBinding binding = RubyBinding.newBinding(Ruby.this);
+ 
+                 context.preTrace();
+@@ -2246,14 +2251,14 @@
+             return true;
+         }
+     };
+-    
++
+     private final CallTraceFuncHook callTraceFuncHook = new CallTraceFuncHook();
+-    
++
+     public void addEventHook(EventHook hook) {
+         eventHooks.add(hook);
+         hasEventHooks = true;
+     }
+-    
++
+     public void removeEventHook(EventHook hook) {
+         eventHooks.remove(hook);
+         hasEventHooks = !eventHooks.isEmpty();
+@@ -2261,15 +2266,15 @@
+ 
+     public void setTraceFunction(RubyProc traceFunction) {
+         removeEventHook(callTraceFuncHook);
+-        
++
+         if (traceFunction == null) {
+             return;
+         }
+-        
++
+         callTraceFuncHook.setTraceFunc(traceFunction);
+         addEventHook(callTraceFuncHook);
+     }
+-    
++
+     public void callEventHooks(ThreadContext context, RubyEvent event, String file, int line, String name, IRubyObject type) {
+         for (EventHook eventHook : eventHooks) {
+             if (eventHook.isInterestedInEvent(event)) {
+@@ -2277,11 +2282,11 @@
+             }
+         }
+     }
+-    
++
+     public boolean hasEventHooks() {
+         return hasEventHooks;
+     }
+-    
++
+     public GlobalVariables getGlobalVariables() {
+         return globalVariables;
+     }
+@@ -2325,7 +2330,7 @@
+             finalizers.put(finalizer, null);
+         }
+     }
+-    
++
+     public void removeInternalFinalizer(Finalizable finalizer) {
+         synchronized (internalFinalizersMutex) {
+             if (internalFinalizers != null) {
+@@ -2435,15 +2440,15 @@
+     public RubyArray newArray(IRubyObject[] objects) {
+         return RubyArray.newArray(this, objects);
+     }
+-    
++
+     public RubyArray newArrayNoCopy(IRubyObject[] objects) {
+         return RubyArray.newArrayNoCopy(this, objects);
+     }
+-    
++
+     public RubyArray newArrayNoCopyLight(IRubyObject[] objects) {
+         return RubyArray.newArrayNoCopyLight(this, objects);
+     }
+-    
++
+     public RubyArray newArray(List<IRubyObject> list) {
+         return RubyArray.newArray(this, list);
+     }
+@@ -2459,7 +2464,7 @@
+     public RubyFileStat newFileStat(String filename, boolean lstat) {
+         return RubyFileStat.newFileStat(this, filename, lstat);
+     }
+-    
++
+     public RubyFileStat newFileStat(FileDescriptor descriptor) {
+         return RubyFileStat.newFileStat(this, descriptor);
+     }
+@@ -2514,7 +2519,7 @@
+     public RubyString newString(String string) {
+         return RubyString.newString(this, string);
+     }
+-    
++
+     public RubyString newString(ByteList byteList) {
+         return RubyString.newString(this, byteList);
+     }
+@@ -2522,7 +2527,7 @@
+     @Deprecated
+     public RubyString newStringShared(ByteList byteList) {
+         return RubyString.newStringShared(this, byteList);
+-    }    
++    }
+ 
+     public RubySymbol newSymbol(String name) {
+         return symbolTable.getSymbol(name);
+@@ -2533,7 +2538,7 @@
+      * name String. Don't intern your string just to call this version - the
+      * overhead of interning will more than wipe out any benefit from the faster
+      * lookup.
+-     *   
++     *
+      * @param internedName the symbol name, <em>must</em> be interned! if in
+      *                     doubt, call {@link #newSymbol(String)} instead.
+      * @return the symbol for name
+@@ -2550,8 +2555,8 @@
+ 
+     public RaiseException newRuntimeError(String message) {
+         return newRaiseException(getRuntimeError(), message);
+-    }    
+-    
++    }
++
+     public RaiseException newArgumentError(String message) {
+         return newRaiseException(getArgumentError(), message);
+     }
+@@ -2635,14 +2640,14 @@
+     public RaiseException newErrnoEEXISTError(String message) {
+         return newRaiseException(getErrno().fastGetClass("EEXIST"), message);
+     }
+-    
++
+     public RaiseException newErrnoEDOMError(String message) {
+         return newRaiseException(getErrno().fastGetClass("EDOM"), "Domain error - " + message);
+-    }   
+-    
++    }
++
+     public RaiseException newErrnoECHILDError() {
+         return newRaiseException(getErrno().fastGetClass("ECHILD"), "No child processes");
+-    }    
++    }
+ 
+     public RaiseException newIndexError(String message) {
+         return newRaiseException(getIndexError(), message);
+@@ -2683,7 +2688,7 @@
+     public RaiseException newNotImplementedError(String message) {
+         return newRaiseException(getNotImplementedError(), message);
+     }
+-    
++
+     public RaiseException newInvalidEncoding(String message) {
+         return newRaiseException(fastGetClass("Iconv").fastGetClass("InvalidEncoding"), message);
+     }
+@@ -2803,6 +2808,14 @@
+         return stackTraces;
+     }
+ 
++    public IRubyObject getRuntimeVariable(String name) {
++        return this.runtimeVariables.get(name);
++    }
++
++    public void setRuntimeVariable(String name, IRubyObject value) {
++        this.runtimeVariables.put(name, value);
++    }
++
+     public void setRandomSeed(long randomSeed) {
+         this.randomSeed = randomSeed;
+     }
+@@ -2919,27 +2932,27 @@
+     public static boolean isSecurityRestricted() {
+         return securityRestricted;
+     }
+-    
++
+     public static void setSecurityRestricted(boolean restricted) {
+         securityRestricted = restricted;
+     }
+-    
++
+     public POSIX getPosix() {
+         return posix;
+     }
+-    
++
+     public void setRecordSeparatorVar(GlobalVariable recordSeparatorVar) {
+         this.recordSeparatorVar = recordSeparatorVar;
+     }
+-    
++
+     public GlobalVariable getRecordSeparatorVar() {
+         return recordSeparatorVar;
+     }
+-    
++
+     public Set<Script> getJittedMethods() {
+         return jittedMethods;
+     }
+-    
++
+     public ExecutorService getExecutor() {
+         return executor;
+     }
+@@ -2958,7 +2971,7 @@
+ 
+     private volatile int constantGeneration = 1;
+     private final ThreadService threadService;
+-    
++
+     private POSIX posix;
+ 
+     private int stackTraces = 0;
+@@ -2972,17 +2985,17 @@
+     private Random random = new Random();
+ 
+     private List<EventHook> eventHooks = new Vector<EventHook>();
+-    private boolean hasEventHooks;  
++    private boolean hasEventHooks;
+     private boolean globalAbortOnExceptionEnabled = false;
+     private boolean doNotReverseLookupEnabled = false;
+     private volatile boolean objectSpaceEnabled;
+-    
++
+     private final Set<Script> jittedMethods = Collections.synchronizedSet(new WeakHashSet<Script>());
+-    
++
+     private static ThreadLocal<Ruby> currentRuntime = new ThreadLocal<Ruby>();
+-    
++
+     private long globalState = 1;
+-    
++
+     private int safeLevel = -1;
+ 
+     // Default objects
+@@ -2994,7 +3007,7 @@
+ 
+     private IRubyObject verbose;
+     private IRubyObject debug;
+-    
++
+     private RubyThreadGroup defaultThreadGroup;
+ 
+     /**
+@@ -3029,7 +3042,7 @@
+             marshalModule, etcModule, fileTestModule, gcModule,
+             objectSpaceModule, processModule, procUIDModule, procGIDModule,
+             procSysModule, precisionModule, errnoModule;
+-    
++
+     // record separator var, to speed up io ops that use it
+     private GlobalVariable recordSeparatorVar;
+ 
+@@ -3047,13 +3060,13 @@
+     // Java support
+     private JavaSupport javaSupport;
+     private JRubyClassLoader jrubyClassLoader;
+-    
++
+     // Management/monitoring
+     private BeanManager beanManager;
+ 
+     // Parser stats
+     private ParserStats parserStats;
+-    
++
+     // Compilation
+     private final JITCompiler jitCompiler;
+ 
+@@ -3081,7 +3094,8 @@
+ 
+     private LoadService loadService;
+     private EncodingService encodingService;
+-    private GlobalVariables globalVariables = new GlobalVariables(this);
++    private GlobalVariables globalVariables = new GlobalVariables();
++    private Map<String, IRubyObject> runtimeVariables = new ConcurrentHashMap<String, IRubyObject>();
+     private RubyWarnings warnings = new RubyWarnings(this);
+ 
+     // Contains a list of all blocks (as Procs) that should be called when
+@@ -3105,7 +3119,7 @@
+      * weakly referenced, to be executed on tearDown.
+      */
+     private Map<Finalizable, Object> finalizers;
+-    
++
+     /**
+      * A list of JRuby-internal finalizers,  weakly referenced,
+      * to be executed on tearDown.
+@@ -3117,7 +3131,8 @@
+ 
+     // mutex that controls modifications of internal finalizers
+     private final Object internalFinalizersMutex = new Object();
+-    
++
+     // A thread pool to use for executing this runtime's Ruby threads
+     private ExecutorService executor;
++
+ }
+Index: src/org/jruby/RubyModule.java
+===================================================================
+--- src/org/jruby/RubyModule.java	(revision 8091)
++++ src/org/jruby/RubyModule.java	(working copy)
+@@ -190,13 +190,16 @@
+     private final Map<String, CacheEntry> cachedMethods = new ConcurrentHashMap<String, CacheEntry>(12, 0.75f, 1);
+     
+     protected static class Generation {
+-        public volatile int hash;
++        private volatile int hash;
+         public Generation() {
+             hash = hashCode();
+         }
+         public synchronized void update() {
+             hash = hash + (hashCode() * 31);
+         }
++        public int hash() {
++            return hash;
++        }
+     }
+     protected final Generation generation;
+     
+@@ -946,7 +949,7 @@
+     }
+     
+     public final int getSerialNumber() {
+-        return generation.hash;
++        return generation.hash();
+     }
+     
+     private CacheEntry cacheHit(String name) {
+Index: src/org/jruby/util/RuntimeContainer.java
+===================================================================
+--- src/org/jruby/util/RuntimeContainer.java	(revision 0)
++++ src/org/jruby/util/RuntimeContainer.java	(revision 0)
+@@ -0,0 +1,19 @@
++package org.jruby.util;
++
++import org.jruby.Ruby;
++
++/**
++ * @author Fabio Kung
++ */
++public class RuntimeContainer extends JRubyClassLoader {
++    private final Ruby runtime;
++
++    public RuntimeContainer(ClassLoader parent, Ruby runtime) {
++        super(parent);
++        this.runtime = runtime;
++    }
++
++    public Ruby getRuntime() {
++        return runtime;
++    }
++}
+Index: src/org/jruby/util/io/ChannelDescriptor.java
+===================================================================
+--- src/org/jruby/util/io/ChannelDescriptor.java	(revision 8091)
++++ src/org/jruby/util/io/ChannelDescriptor.java	(working copy)
+@@ -94,13 +94,6 @@
+     private AtomicInteger refCounter;
+ 
+     /**
+-     * Used to work-around blocking problems with STDIN. In most cases <code>null</code>.
+-     * See {@link #ChannelDescriptor(InputStream, int, ModeFlags, FileDescriptor)}
+-     * for more details. You probably should not use it.
+-     */
+-    private InputStream baseInputStream;
+-    
+-    /**
+      * Process streams get Channel.newChannel()ed into FileChannel but are not actually
+      * seekable. So instead of just the isSeekable check doing instanceof FileChannel,
+      * we must also add this boolean to check, which we set to false when it's known
+@@ -148,28 +141,6 @@
+     }
+ 
+     /**
+-     * Special constructor to create the ChannelDescriptor out of the stream, file number,
+-     * mode flags, and file descriptor object. The channel will be created from the
+-     * provided stream. The channel will be kept open until all ChannelDescriptor
+-     * references to it have been closed. <b>Note:</b> in most cases, you should not
+-     * use this constructor, it's reserved mostly for STDIN.
+-     *
+-     * @param baseInputStream The stream to create the channel for the new descriptor
+-     * @param fileno The file number for the new descriptor
+-     * @param originalModes The mode flags for the new descriptor
+-     * @param fileDescriptor The java.io.FileDescriptor object for the new descriptor
+-     */
+-    public ChannelDescriptor(InputStream baseInputStream, int fileno, ModeFlags originalModes, FileDescriptor fileDescriptor) {
+-        // The reason why we need the stream is to be able to invoke available() on it.
+-        // STDIN in Java is non-interruptible, non-selectable, and attempt to read
+-        // on such stream might lead to thread being blocked without *any* way to unblock it.
+-        // That's where available() comes it, so at least we could check whether
+-        // anything is available to be read without blocking.
+-        this(Channels.newChannel(baseInputStream), fileno, originalModes, fileDescriptor, new AtomicInteger(1), true);
+-        this.baseInputStream = baseInputStream;
+-    }
+-
+-    /**
+      * Construct a new ChannelDescriptor with the given channel, file number,
+      * and file descriptor object. The channel will be kept open until all ChannelDescriptor
+      * references to it have been closed. The channel's capabilities will be used
+@@ -217,30 +188,20 @@
+     }
+ 
+     /**
+-     * This is intentionally non-public, since it should not be really
+-     * used outside of very limited use case (handling of STDIN).
+-     * See {@link #ChannelDescriptor(InputStream, int, ModeFlags, FileDescriptor)}
+-     * for more info.
+-     */
+-    /*package-protected*/ InputStream getBaseInputStream() {
+-        return baseInputStream;
+-    }
+-
+-    /**
+      * Whether the channel associated with this descriptor is seekable (i.e.
+      * whether it is instanceof FileChannel).
+      * 
+      * @return true if the associated channel is seekable, false otherwise
+      */
+     public boolean isSeekable() {
+-        return canBeSeekable && channel instanceof FileChannel;
++        return canBeSeekable && getChannel() instanceof FileChannel;
+     }
+     
+     /**
+      * Set the channel to be explicitly seekable or not, for streams that appear
+      * to be seekable with the instanceof FileChannel check.
+      * 
+-     * @param seekable Whether the channel is seekable or not.
++     * @param canBeSeekable Whether the channel is seekable or not.
+      */
+     public void setCanBeSeekable(boolean canBeSeekable) {
+         this.canBeSeekable = canBeSeekable;
+@@ -251,7 +212,7 @@
+      * for which many operations are simply noops.
+      */
+     public boolean isNull() {
+-        return channel instanceof NullChannel;
++        return getChannel() instanceof NullChannel;
+     }
+ 
+     /**
+@@ -261,7 +222,7 @@
+      * @return true if the associated channel is writable, false otherwise
+      */
+     public boolean isWritable() {
+-        return channel instanceof WritableByteChannel;
++        return getChannel() instanceof WritableByteChannel;
+     }
+     
+     /**
+@@ -270,7 +231,7 @@
+      * @return true if the associated channel is open, false otherwise
+      */
+     public boolean isOpen() {
+-        return channel.isOpen();
++        return getChannel().isOpen();
+     }
+     
+     /**
+@@ -321,7 +282,7 @@
+             
+             if (DEBUG) getLogger("ChannelDescriptor").info("Reopen fileno " + newFileno + ", refs now: " + refCounter.get());
+ 
+-            return new ChannelDescriptor(channel, newFileno, originalModes, fileDescriptor, refCounter, canBeSeekable);
++            return new ChannelDescriptor(getChannel(), newFileno, originalModes, fileDescriptor, refCounter, canBeSeekable);
+         }
+     }
+     
+@@ -338,7 +299,7 @@
+ 
+             if (DEBUG) getLogger("ChannelDescriptor").info("Reopen fileno " + fileno + ", refs now: " + refCounter.get());
+ 
+-            return new ChannelDescriptor(channel, fileno, originalModes, fileDescriptor, refCounter, canBeSeekable);
++            return new ChannelDescriptor(getChannel(), fileno, originalModes, fileDescriptor, refCounter, canBeSeekable);
+         }
+     }
+     
+@@ -386,10 +347,10 @@
+      * @return the new offset into the FileChannel.
+      */
+     public long lseek(long offset, int whence) throws IOException, InvalidValueException, PipeException, BadDescriptorException {
+-        if (channel instanceof FileChannel) {
++        if (getChannel() instanceof FileChannel) {
+             checkOpen();
+             
+-            FileChannel fileChannel = (FileChannel)channel;
++            FileChannel fileChannel = (FileChannel)getChannel();
+             try {
+                 long pos;
+                 switch (whence) {
+@@ -459,7 +420,7 @@
+     public int read(ByteBuffer buffer) throws IOException, BadDescriptorException {
+         checkOpen();
+         
+-        ReadableByteChannel readChannel = (ReadableByteChannel) channel;
++        ReadableByteChannel readChannel = (ReadableByteChannel) getChannel();
+         int bytesRead = 0;
+         bytesRead = readChannel.read(buffer);
+ 
+@@ -478,10 +439,10 @@
+     public int internalWrite(ByteBuffer buffer) throws IOException, BadDescriptorException {
+         checkOpen();
+         
+-        WritableByteChannel writeChannel = (WritableByteChannel)channel;
++        WritableByteChannel writeChannel = (WritableByteChannel)getChannel();
+         
+         if (isSeekable() && originalModes.isAppendable()) {
+-            FileChannel fileChannel = (FileChannel)channel;
++            FileChannel fileChannel = (FileChannel)getChannel();
+             fileChannel.position(fileChannel.size());
+         }
+         
+@@ -677,7 +638,7 @@
+             }
+ 
+             // if channel is already closed, we're no longer valid
+-            if (!channel.isOpen()) {
++            if (!getChannel().isOpen()) {
+                 throw new BadDescriptorException();
+             }
+ 
+@@ -687,7 +648,7 @@
+             if (DEBUG) getLogger("ChannelDescriptor").info("Descriptor for fileno " + fileno + " refs: " + count);
+ 
+             if (count <= 0) {
+-                channel.close();
++                getChannel().close();
+             }
+         }
+     }
+Index: src/org/jruby/util/io/ChannelStream.java
+===================================================================
+--- src/org/jruby/util/io/ChannelStream.java	(revision 8091)
++++ src/org/jruby/util/io/ChannelStream.java	(working copy)
+@@ -87,10 +87,9 @@
+     private final static int BULK_READ_SIZE = 16 * 1024;
+     private final static ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
+     
+-    private Ruby runtime;
+     protected ModeFlags modes;
+     protected boolean sync = false;
+-    
++
+     protected volatile ByteBuffer buffer; // r/w buffer
+     protected boolean reading; // are we reading or writing?
+     private ChannelDescriptor descriptor;
+@@ -100,25 +99,23 @@
+ 
+     private boolean eof = false;
+ 
+-    public ChannelStream(Ruby runtime, ChannelDescriptor descriptor, ModeFlags modes, FileDescriptor fileDescriptor) throws InvalidValueException {
++    public ChannelStream(ChannelDescriptor descriptor, ModeFlags modes, FileDescriptor fileDescriptor) throws InvalidValueException {
+         descriptor.checkNewModes(modes);
+-        
+-        this.runtime = runtime;
++
+         this.descriptor = descriptor;
+         this.modes = modes;
+         this.buffer = ByteBuffer.allocate(BUFSIZE);
+         buffer.flip();
+         this.reading = true;
+-        
++
+         // this constructor is used by fdopen, so we don't increment descriptor ref count
+     }
+ 
+-    public ChannelStream(Ruby runtime, ChannelDescriptor descriptor) {
+-        this(runtime, descriptor, descriptor.getFileDescriptor());
++    public ChannelStream(ChannelDescriptor descriptor) {
++        this(descriptor, descriptor.getFileDescriptor());
+     }
+ 
+-    public ChannelStream(Ruby runtime, ChannelDescriptor descriptor, FileDescriptor fileDescriptor) {
+-        this.runtime = runtime;
++    public ChannelStream(ChannelDescriptor descriptor, FileDescriptor fileDescriptor) {
+         this.descriptor = descriptor;
+         this.modes = descriptor.getOriginalModes();
+         buffer = ByteBuffer.allocate(BUFSIZE);
+@@ -126,10 +123,9 @@
+         this.reading = true;
+     }
+ 
+-    public ChannelStream(Ruby runtime, ChannelDescriptor descriptor, ModeFlags modes) throws InvalidValueException {
++    public ChannelStream(ChannelDescriptor descriptor, ModeFlags modes) throws InvalidValueException {
+         descriptor.checkNewModes(modes);
+-        
+-        this.runtime = runtime;
++
+         this.descriptor = descriptor;
+         this.modes = modes;
+         buffer = ByteBuffer.allocate(BUFSIZE);
+@@ -138,9 +134,9 @@
+     }
+ 
+     public Ruby getRuntime() {
+-        return runtime;
++        return Ruby.getCurrentRuntime();
+     }
+-    
++
+     public void checkReadable() throws IOException {
+         if (!modes.isReadable()) throw new IOException("not opened for reading");
+     }
+@@ -152,11 +148,11 @@
+     public void checkPermissionsSubsetOf(ModeFlags subsetModes) {
+         subsetModes.isSubsetOf(modes);
+     }
+-    
++
+     public ModeFlags getModes() {
+     	return modes;
+     }
+-    
++
+     public boolean isSync() {
+         return sync;
+     }
+@@ -176,11 +172,11 @@
+             Thread.sleep(10);
+         }
+     }
+-    
++
+     public boolean readDataBuffered() {
+         return reading && buffer.hasRemaining();
+     }
+-    
++
+     public boolean writeDataBuffered() {
+         return !reading && buffer.position() > 0;
+     }
+@@ -202,22 +198,22 @@
+             PARAGRAPH_SEPARATOR : separatorString;
+ 
+         descriptor.checkOpen();
+-        
++
+         if (feof()) {
+             return null;
+         }
+-        
++
+         int c = read();
+-        
++
+         if (c == -1) {
+             return null;
+         }
+-        
++
+         // unread back
+         buffer.position(buffer.position() - 1);
+ 
+         ByteList buf = new ByteList(40);
+-        
++
+         byte first = separator.bytes[separator.begin];
+ 
+         LineLoop : while (true) {
+@@ -225,7 +221,7 @@
+                 byte[] bytes = buffer.array();
+                 int offset = buffer.position();
+                 int max = buffer.limit();
+-                
++
+                 // iterate over remainder of buffer until we find a match
+                 for (int i = offset; i < max; i++) {
+                     c = bytes[i];
+@@ -240,13 +236,13 @@
+                         break ReadLoop;
+                     }
+                 }
+-                
++
+                 // no match, append remainder of buffer and continue with next block
+                 buf.append(bytes, offset, buffer.remaining());
+                 int read = refillBuffer();
+                 if (read == -1) break LineLoop;
+             }
+-            
++
+             // found a match above, check if remaining separator characters match, appending as we go
+             for (int i = 0; i < separator.realSize; i++) {
+                 if (c == -1) {
+@@ -272,7 +268,7 @@
+ 
+         return buf;
+     }
+-    
++
+     /**
+      * An version of read that reads all bytes up to and including a terminator byte.
+      * <p>
+@@ -282,7 +278,7 @@
+      * @param dst The output buffer.
+      * @param terminator The byte to terminate reading.
+      * @return The number of bytes read, or -1 if EOF is reached.
+-     * 
++     *
+      * @throws java.io.IOException
+      * @throws org.jruby.util.io.BadDescriptorException
+      */
+@@ -290,7 +286,7 @@
+         checkReadable();
+         ensureRead();
+         descriptor.checkOpen();
+-        
++
+         int totalRead = 0;
+         boolean found = false;
+         if (ungotc != -1) {
+@@ -324,7 +320,7 @@
+         }
+         return totalRead;
+     }
+-    
++
+     public synchronized ByteList readall() throws IOException, BadDescriptorException {
+         if (descriptor.isSeekable()) {
+             invalidateBuffer();
+@@ -336,7 +332,7 @@
+             }
+             left += ungotc != -1 ? 1 : 0;
+             ByteList result = new ByteList((int) left);
+-            ByteBuffer buf = ByteBuffer.wrap(result.unsafeBytes(), 
++            ByteBuffer buf = ByteBuffer.wrap(result.unsafeBytes(),
+                     result.begin(), (int) left);
+             if (ungotc != -1) {
+                 buf.put((byte) ungotc);
+@@ -358,7 +354,7 @@
+ 
+             ByteList byteList = new ByteList();
+             ByteList read = fread(BUFSIZE);
+-            
++
+             if (read == null) {
+                 eof = true;
+                 return byteList;
+@@ -370,14 +366,14 @@
+             }
+ 
+             return byteList;
+-        } 
++        }
+     }
+-    
++
+     /**
+      * <p>Close IO handler resources.</p>
+-     * @throws IOException 
+-     * @throws BadDescriptorException 
+-     * 
++     * @throws IOException
++     * @throws BadDescriptorException
++     *
+      * @see org.jruby.util.IOHandler#close()
+      */
+     public synchronized void fclose() throws IOException, BadDescriptorException {
+@@ -408,7 +404,7 @@
+     /**
+      * Internal close, to safely work for finalizing.
+      * @param finalizing true if this is in a finalizing context
+-     * @throws IOException 
++     * @throws IOException
+      * @throws BadDescriptorException
+      */
+     private void closeForFinalize() {
+@@ -422,8 +418,8 @@
+     }
+ 
+     /**
+-     * @throws IOException 
+-     * @throws BadDescriptorException 
++     * @throws IOException
++     * @throws BadDescriptorException
+      * @see org.jruby.util.IOHandler#flush()
+      */
+     public synchronized int fflush() throws IOException, BadDescriptorException {
+@@ -435,14 +431,14 @@
+         }
+         return 0;
+     }
+-    
++
+     /**
+      * Flush the write buffer to the channel (if needed)
+      * @throws IOException
+      */
+     private void flushWrite() throws IOException, BadDescriptorException {
+         if (reading || !modes.isWritable() || buffer.position() == 0) return; // Don't bother
+-        
++
+         int len = buffer.position();
+         buffer.flip();
+         int n = descriptor.write(buffer);
+@@ -452,7 +448,7 @@
+         }
+         buffer.clear();
+     }
+-    
++
+     /**
+      * Flush the write buffer to the channel (if needed)
+      * @throws IOException
+@@ -494,12 +490,7 @@
+      * @see org.jruby.util.IOHandler#getInputStream()
+      */
+     public InputStream newInputStream() {
+-        InputStream in = descriptor.getBaseInputStream();
+-        if (in == null) {
+-            return new BufferedInputStream(Channels.newInputStream((ReadableByteChannel)descriptor.getChannel()));
+-        } else {
+-            return in;
+-        }
++        return new BufferedInputStream(Channels.newInputStream((ReadableByteChannel) descriptor.getChannel()));
+     }
+ 
+     /**
+@@ -508,28 +499,28 @@
+     public OutputStream newOutputStream() {
+         return new BufferedOutputStream(Channels.newOutputStream((WritableByteChannel)descriptor.getChannel()));
+     }
+-    
++
+     public void clearerr() {
+         eof = false;
+     }
+-    
++
+     /**
+-     * @throws IOException 
+-     * @throws BadDescriptorException 
++     * @throws IOException
++     * @throws BadDescriptorException
+      * @see org.jruby.util.IOHandler#isEOF()
+      */
+     public boolean feof() throws IOException, BadDescriptorException {
+         checkReadable();
+-        
++
+         if (eof) {
+             return true;
+         } else {
+             return false;
+         }
+     }
+-    
++
+     /**
+-     * @throws IOException 
++     * @throws IOException
+      * @see org.jruby.util.IOHandler#pos()
+      */
+     public synchronized long fgetpos() throws IOException, PipeException, InvalidValueException, BadDescriptorException {
+@@ -550,14 +541,14 @@
+             throw new PipeException();
+         }
+     }
+-    
++
+     /**
+      * Implementation of libc "lseek", which seeks on seekable streams, raises
+      * EPIPE if the fd is assocated with a pipe, socket, or FIFO, and doesn't
+      * do anything for other cases (like stdio).
+-     * 
+-     * @throws IOException 
+-     * @throws InvalidValueException 
++     *
++     * @throws IOException
++     * @throws InvalidValueException
+      * @see org.jruby.util.IOHandler#seek(long, int)
+      */
+     public synchronized void lseek(long offset, int type) throws IOException, InvalidValueException, PipeException, BadDescriptorException {
+@@ -636,7 +627,7 @@
+             reading = true;
+         }
+     }
+-    
++
+     private void resetForWrite() throws IOException {
+         if (descriptor.isSeekable()) {
+             FileChannel fileChannel = (FileChannel)descriptor.getChannel();
+@@ -648,7 +639,7 @@
+         buffer.clear();
+         reading = false;
+     }
+-    
++
+     /**
+      * Ensure buffer is ready for writing.
+      * @throws IOException
+@@ -661,25 +652,25 @@
+     public synchronized ByteList read(int number) throws IOException, BadDescriptorException {
+         checkReadable();
+         ensureReadNonBuffered();
+-        
++
+         ByteList byteList = new ByteList(number);
+-        
++
+         // TODO this should entry into error handling somewhere
+         int bytesRead = descriptor.read(number, byteList);
+-        
++
+         if (bytesRead == -1) {
+             eof = true;
+         }
+-        
++
+         return byteList;
+     }
+ 
+     private ByteList bufferedRead(int number) throws IOException, BadDescriptorException {
+         checkReadable();
+         ensureRead();
+-        
++
+         ByteList result = new ByteList(0);
+-        
++
+         int len = -1;
+         if (buffer.hasRemaining()) { // already have some bytes buffered
+             len = (number <= buffer.remaining()) ? number : buffer.remaining();
+@@ -704,26 +695,26 @@
+                 break;
+             }
+         }
+-        
++
+         //
+         // Complete the request by filling the read buffer first
+         //
+         while (!done && result.length() != number) {
+             int read = refillBuffer();
+-            
++
+             if (read == -1) {
+                 eof = true;
+                 break;
+             } else if (read == 0) {
+                 break;
+             }
+-            
++
+             // append what we read into our buffer and allow the loop to continue
+             int desired = number - result.length();
+             len = (desired < read) ? desired : read;
+             result.append(buffer, len);
+         }
+-        
++
+         if (result.length() == 0 && number != 0) {
+             if (eof) {
+                 throw new EOFException();
+@@ -731,10 +722,10 @@
+         }
+         return result;
+     }
+-    
++
+     private int bufferedRead() throws IOException, BadDescriptorException {
+         ensureRead();
+-        
++
+         if (!buffer.hasRemaining()) {
+             int len = refillBuffer();
+             if (len == -1) {
+@@ -746,42 +737,42 @@
+         }
+         return buffer.get() & 0xFF;
+     }
+-    
++
+     /**
+-     * @throws IOException 
+-     * @throws BadDescriptorException 
++     * @throws IOException
++     * @throws BadDescriptorException
+      * @see org.jruby.util.IOHandler#syswrite(String buf)
+      */
+     private int bufferedWrite(ByteList buf) throws IOException, BadDescriptorException {
+         getRuntime().secure(4);
+         checkWritable();
+         ensureWrite();
+-        
++
+         // Ruby ignores empty syswrites
+         if (buf == null || buf.length() == 0) return 0;
+-        
++
+         if (buf.length() > buffer.capacity()) { // Doesn't fit in buffer. Write immediately.
+             flushWrite(); // ensure nothing left to write
+-            
+ 
++
+             int n = descriptor.write(ByteBuffer.wrap(buf.unsafeBytes(), buf.begin(), buf.length()));
+             if(n != buf.length()) {
+                 // TODO: check the return value here
+             }
+         } else {
+             if (buf.length() > buffer.remaining()) flushWrite();
+-            
++
+             buffer.put(buf.unsafeBytes(), buf.begin(), buf.length());
+         }
+-        
++
+         if (isSync()) sync();
+-        
++
+         return buf.realSize;
+     }
+-    
++
+     /**
+-     * @throws IOException 
+-     * @throws BadDescriptorException 
++     * @throws IOException
++     * @throws BadDescriptorException
+      * @see org.jruby.util.IOHandler#syswrite(String buf)
+      */
+     private int bufferedWrite(int c) throws IOException, BadDescriptorException {
+@@ -790,14 +781,14 @@
+         ensureWrite();
+ 
+         if (!buffer.hasRemaining()) flushWrite();
+-        
++
+         buffer.put((byte) c);
+-            
++
+         if (isSync()) sync();
+-            
++
+         return 1;
+     }
+-    
++
+     public synchronized void ftruncate(long newLength) throws IOException,
+             BadDescriptorException, InvalidValueException {
+         Channel ch = descriptor.getChannel();
+@@ -810,20 +801,20 @@
+             // truncate can't lengthen files, so we save position, seek/write, and go back
+             long position = fileChannel.position();
+             int difference = (int)(newLength - fileChannel.size());
+-            
++
+             fileChannel.position(fileChannel.size());
+             // FIXME: This worries me a bit, since it could allocate a lot with a large newLength
+             fileChannel.write(ByteBuffer.allocate(difference));
+             fileChannel.position(position);
+         } else {
+             fileChannel.truncate(newLength);
+-        }        
++        }
+     }
+-    
++
+     /**
+      * Invalidate buffer before a position change has occurred (e.g. seek),
+      * flushing writes if required, and correcting file position if reading
+-     * @throws IOException 
++     * @throws IOException
+      */
+     private void invalidateBuffer() throws IOException, BadDescriptorException {
+         if (!reading) flushWrite();
+@@ -862,13 +853,13 @@
+         if (c == -1) {
+             return -1;
+         }
+-        
++
+         // putting a bit back, so we're not at EOF anymore
+         eof = false;
+ 
+         // save the ungot
+         ungotc = c;
+-        
++
+         return c;
+     }
+ 
+@@ -876,7 +867,7 @@
+         if (eof) {
+             return -1;
+         }
+-        
++
+         checkReadable();
+ 
+         int c = read();
+@@ -885,7 +876,7 @@
+             eof = true;
+             return c;
+         }
+-        
++
+         return c & 0xff;
+     }
+ 
+@@ -896,12 +887,12 @@
+         getRuntime().secure(4);
+         checkWritable();
+         ensureWrite();
+-        
++
+         // Ruby ignores empty syswrites
+         if (buf == null || buf.length() == 0) return 0;
+-        
++
+         if (buffer.position() != 0 && !flushWrite(false)) return 0;
+-        
++
+         if (descriptor.getChannel() instanceof SelectableChannel) {
+             SelectableChannel selectableChannel = (SelectableChannel)descriptor.getChannel();
+             synchronized (selectableChannel.blockingLock()) {
+@@ -1002,13 +993,13 @@
+         } else {
+             // otherwise, we try an unbuffered read to get whatever's available
+             return read(number);
+-        }        
++        }
+     }
+ 
+     public synchronized int read() throws IOException, BadDescriptorException {
+         try {
+             descriptor.checkOpen();
+-            
++
+             if (ungotc >= 0) {
+                 int c = ungotc;
+                 ungotc = -1;
+@@ -1021,11 +1012,11 @@
+             return -1;
+         }
+     }
+-    
++
+     public ChannelDescriptor getDescriptor() {
+         return descriptor;
+     }
+-    
++
+     public void setBlocking(boolean block) throws IOException {
+         if (!(descriptor.getChannel() instanceof SelectableChannel)) {
+             return;
+@@ -1059,7 +1050,7 @@
+         if (descriptor.isOpen()) {
+             descriptor.close();
+         }
+-        
++
+         if (path.equals("/dev/null") || path.equalsIgnoreCase("nul:") || path.equalsIgnoreCase("nul")) {
+             descriptor = new ChannelDescriptor(new NullChannel(), descriptor.getFileno(), modes, new FileDescriptor());
+         } else {
+@@ -1083,27 +1074,27 @@
+             RandomAccessFile file = new RandomAccessFile(theFile, modes.toJavaModeString());
+ 
+             if (modes.isTruncate()) file.setLength(0L);
+-            
++
+             descriptor = new ChannelDescriptor(file.getChannel(), descriptor.getFileno(), modes, file.getFD());
+-        
++
+             if (modes.isAppendable()) lseek(0, SEEK_END);
+         }
+     }
+-    
++
+     public static Stream fopen(Ruby runtime, String path, ModeFlags modes) throws FileNotFoundException, DirectoryAsFileException, FileExistsException, IOException, InvalidValueException, PipeException, BadDescriptorException {
+         String cwd = runtime.getCurrentDirectory();
+-        
++
+         ChannelDescriptor descriptor = ChannelDescriptor.open(cwd, path, modes);
+-        
++
+         Stream stream = fdopen(runtime, descriptor, modes);
+-        
++
+         if (modes.isAppendable()) stream.lseek(0, Stream.SEEK_END);
+-        
++
+         return stream;
+     }
+-    
++
+     public static Stream fdopen(Ruby runtime, ChannelDescriptor descriptor, ModeFlags modes) throws InvalidValueException {
+-        Stream handler = new ChannelStream(runtime, descriptor, modes, descriptor.getFileDescriptor());
++        Stream handler = new ChannelStream(descriptor, modes, descriptor.getFileDescriptor());
+         
+         return handler;
+     }
+Index: src/org/jruby/RubyGlobal.java
+===================================================================
+--- src/org/jruby/RubyGlobal.java	(revision 8091)
++++ src/org/jruby/RubyGlobal.java	(working copy)
+@@ -43,29 +43,28 @@
+ import org.jruby.common.IRubyWarnings.ID;
+ import org.jruby.environment.OSEnvironmentReaderExcepton;
+ import org.jruby.environment.OSEnvironment;
+-import org.jruby.internal.runtime.ValueAccessor;
++import org.jruby.internal.runtime.RuntimeVariableAccessor;
+ import org.jruby.javasupport.JavaUtil;
+ import org.jruby.javasupport.util.RuntimeHelpers;
+ import org.jruby.runtime.Constants;
+ import org.jruby.runtime.GlobalVariable;
+-import org.jruby.runtime.IAccessor;
+ import org.jruby.runtime.ReadonlyGlobalVariable;
+ import org.jruby.runtime.ThreadContext;
+ import org.jruby.runtime.builtin.IRubyObject;
+ import org.jruby.util.KCode;
+ 
+ /** This class initializes global variables and constants.
+- * 
++ *
+  * @author jpetersen
+  */
+ public class RubyGlobal {
+-    
++
+     /**
+      * Obligate string-keyed and string-valued hash, used for ENV and ENV_JAVA
+-     * 
++     *
+      */
+     public static class StringOnlyRubyHash extends RubyHash {
+-        
++
+         public StringOnlyRubyHash(Ruby runtime, Map valueMap, IRubyObject defaultValue) {
+             super(runtime, valueMap, defaultValue);
+         }
+@@ -95,26 +94,26 @@
+             if (value.isNil()) {
+                 return super.delete(context, key, org.jruby.runtime.Block.NULL_BLOCK);
+             }
+-            
++
+             //return super.aset(getRuntime().newString("sadfasdF"), getRuntime().newString("sadfasdF"));
+             return super.op_aset(context, RuntimeHelpers.invoke(context, key, "to_str"),
+                     value.isNil() ? getRuntime().getNil() : RuntimeHelpers.invoke(context, value, "to_str"));
+         }
+-        
++
+         @JRubyMethod
+         @Override
+         public IRubyObject to_s(){
+             return getRuntime().newString("ENV");
+         }
+     }
+-    
++
+     public static void createGlobals(ThreadContext context, Ruby runtime) {
+         runtime.defineGlobalConstant("TOPLEVEL_BINDING", runtime.newBinding());
+-        
++
+         runtime.defineGlobalConstant("TRUE", runtime.getTrue());
+         runtime.defineGlobalConstant("FALSE", runtime.getFalse());
+         runtime.defineGlobalConstant("NIL", runtime.getNil());
+-        
++
+         // define ARGV and $* for this runtime
+         RubyArray argvArray = runtime.newArray();
+         String[] argv = runtime.getInstanceConfig().getArgv();
+@@ -122,12 +121,11 @@
+             argvArray.append(RubyString.newStringShared(runtime, argv[i].getBytes()));
+         }
+         runtime.defineGlobalConstant("ARGV", argvArray);
+-        runtime.getGlobalVariables().defineReadonly("$*", new ValueAccessor(argvArray));
++        runtime.getGlobalVariables().defineReadonly("$*", new RuntimeVariableAccessor("$*", argvArray));
+ 
+-        IAccessor d = new ValueAccessor(runtime.newString(
+-                runtime.getInstanceConfig().displayedFileName()));
+-        runtime.getGlobalVariables().define("$PROGRAM_NAME", d);
+-        runtime.getGlobalVariables().define("$0", d);
++        RubyString fileName = runtime.newString(runtime.getInstanceConfig().displayedFileName());
++        runtime.getGlobalVariables().define("$PROGRAM_NAME", new RuntimeVariableAccessor("$PROGRAM_NAME", fileName));
++        runtime.getGlobalVariables().define("$0", new RuntimeVariableAccessor("$0", fileName));
+ 
+         // Version information:
+         IRubyObject version = runtime.newString(Constants.RUBY_VERSION).freeze(context);
+@@ -144,36 +142,36 @@
+         runtime.defineGlobalConstant("VERSION", version);
+         runtime.defineGlobalConstant("RELEASE_DATE", release);
+         runtime.defineGlobalConstant("PLATFORM", platform);
+-        
++
+         IRubyObject jrubyVersion = runtime.newString(Constants.VERSION).freeze(context);
+         runtime.defineGlobalConstant("JRUBY_VERSION", jrubyVersion);
+-		
+-        GlobalVariable kcodeGV = new KCodeGlobalVariable(runtime, "$KCODE", runtime.newString("NONE"));
++
++        GlobalVariable kcodeGV = new KCodeGlobalVariable("$KCODE", runtime.newString("NONE"));
+         runtime.defineVariable(kcodeGV);
+         runtime.defineVariable(new GlobalVariable.Copy(runtime, "$-K", kcodeGV));
+         IRubyObject defaultRS = runtime.newString(runtime.getInstanceConfig().getRecordSeparator()).freeze(context);
+-        GlobalVariable rs = new StringGlobalVariable(runtime, "$/", defaultRS);
++        GlobalVariable rs = new StringGlobalVariable("$/", defaultRS);
+         runtime.defineVariable(rs);
+         runtime.setRecordSeparatorVar(rs);
+         runtime.getGlobalVariables().setDefaultSeparator(defaultRS);
+-        runtime.defineVariable(new StringGlobalVariable(runtime, "$\\", runtime.getNil()));
+-        runtime.defineVariable(new StringGlobalVariable(runtime, "$,", runtime.getNil()));
++        runtime.defineVariable(new StringGlobalVariable("$\\", runtime.getNil()));
++        runtime.defineVariable(new StringGlobalVariable("$,", runtime.getNil()));
+ 
+-        runtime.defineVariable(new LineNumberGlobalVariable(runtime, "$.", RubyFixnum.one(runtime)));
+-        runtime.defineVariable(new LastlineGlobalVariable(runtime, "$_"));
+-        runtime.defineVariable(new LastExitStatusVariable(runtime, "$?"));
++        runtime.defineVariable(new LineNumberGlobalVariable("$.", RubyFixnum.one(runtime)));
++        runtime.defineVariable(new LastlineGlobalVariable("$_"));
++        runtime.defineVariable(new LastExitStatusVariable("$?"));
+ 
+-        runtime.defineVariable(new ErrorInfoGlobalVariable(runtime, "$!", runtime.getNil()));
+-        runtime.defineVariable(new NonEffectiveGlobalVariable(runtime, "$=", runtime.getFalse()));
++        runtime.defineVariable(new ErrorInfoGlobalVariable("$!", runtime.getNil()));
++        runtime.defineVariable(new NonEffectiveGlobalVariable("$=", runtime.getFalse()));
+ 
+         if(runtime.getInstanceConfig().getInputFieldSeparator() == null) {
+-            runtime.defineVariable(new GlobalVariable(runtime, "$;", runtime.getNil()));
++            runtime.defineVariable(new GlobalVariable("$;", runtime.getNil()));
+         } else {
+-            runtime.defineVariable(new GlobalVariable(runtime, "$;", RubyRegexp.newRegexp(runtime, runtime.getInstanceConfig().getInputFieldSeparator(), 0)));
++            runtime.defineVariable(new GlobalVariable("$;", RubyRegexp.newRegexp(runtime, runtime.getInstanceConfig().getInputFieldSeparator(), 0)));
+         }
+-        
++
+         Boolean verbose = runtime.getInstanceConfig().getVerbose();
+-        IRubyObject verboseValue = null;
++        IRubyObject verboseValue;
+         if (verbose == null) {
+             verboseValue = runtime.getNil();
+         } else if(verbose == Boolean.TRUE) {
+@@ -181,68 +179,67 @@
+         } else {
+             verboseValue = runtime.getFalse();
+         }
+-        runtime.defineVariable(new VerboseGlobalVariable(runtime, "$VERBOSE", verboseValue));
+-        
++        runtime.defineVariable(new VerboseGlobalVariable("$VERBOSE", verboseValue));
++
+         IRubyObject debug = runtime.newBoolean(runtime.getInstanceConfig().isDebug());
+-        runtime.defineVariable(new DebugGlobalVariable(runtime, "$DEBUG", debug));
+-        runtime.defineVariable(new DebugGlobalVariable(runtime, "$-d", debug));
++        runtime.defineVariable(new DebugGlobalVariable("$DEBUG", debug));
++        runtime.defineVariable(new DebugGlobalVariable("$-d", debug));
+ 
+-        runtime.defineVariable(new SafeGlobalVariable(runtime, "$SAFE"));
++        runtime.defineVariable(new SafeGlobalVariable("$SAFE"));
+ 
+-        runtime.defineVariable(new BacktraceGlobalVariable(runtime, "$@"));
++        runtime.defineVariable(new BacktraceGlobalVariable("$@"));
+ 
+         IRubyObject stdin = new RubyIO(runtime, STDIO.IN);
+         IRubyObject stdout = new RubyIO(runtime, STDIO.OUT);
+         IRubyObject stderr = new RubyIO(runtime, STDIO.ERR);
+ 
+-        runtime.defineVariable(new InputGlobalVariable(runtime, "$stdin", stdin));
++        runtime.getGlobalVariables().define("$stdin", new RuntimeVariableAccessor("$stdin", stdin));
+ 
+-        runtime.defineVariable(new OutputGlobalVariable(runtime, "$stdout", stdout));
++        runtime.getGlobalVariables().define("$stdout", new RuntimeOutputAccessor("$stdout", stdout));
+         runtime.getGlobalVariables().alias("$>", "$stdout");
+         runtime.getGlobalVariables().alias("$defout", "$stdout");
+ 
+-        runtime.defineVariable(new OutputGlobalVariable(runtime, "$stderr", stderr));
++        runtime.getGlobalVariables().define("$stderr", new RuntimeOutputAccessor("$stderr", stderr));
+         runtime.getGlobalVariables().alias("$deferr", "$stderr");
+ 
+         runtime.defineGlobalConstant("STDIN", stdin);
+         runtime.defineGlobalConstant("STDOUT", stdout);
+         runtime.defineGlobalConstant("STDERR", stderr);
+ 
+-        runtime.defineVariable(new LoadedFeatures(runtime, "$\""));
+-        runtime.defineVariable(new LoadedFeatures(runtime, "$LOADED_FEATURES"));
++        runtime.defineVariable(new LoadedFeatures("$\""));
++        runtime.defineVariable(new LoadedFeatures("$LOADED_FEATURES"));
+ 
+-        runtime.defineVariable(new LoadPath(runtime, "$:"));
+-        runtime.defineVariable(new LoadPath(runtime, "$-I"));
+-        runtime.defineVariable(new LoadPath(runtime, "$LOAD_PATH"));
+-        
+-        runtime.defineVariable(new MatchMatchGlobalVariable(runtime, "$&"));
+-        runtime.defineVariable(new PreMatchGlobalVariable(runtime, "$`"));
+-        runtime.defineVariable(new PostMatchGlobalVariable(runtime, "$'"));
+-        runtime.defineVariable(new LastMatchGlobalVariable(runtime, "$+"));
+-        runtime.defineVariable(new BackRefGlobalVariable(runtime, "$~"));
++        runtime.defineVariable(new LoadPath("$:"));
++        runtime.defineVariable(new LoadPath("$-I"));
++        runtime.defineVariable(new LoadPath("$LOAD_PATH"));
+ 
+-        // On platforms without a c-library accessable through JNA, getpid will return hashCode 
++        runtime.defineVariable(new MatchMatchGlobalVariable("$&"));
++        runtime.defineVariable(new PreMatchGlobalVariable("$`"));
++        runtime.defineVariable(new PostMatchGlobalVariable("$'"));
++        runtime.defineVariable(new LastMatchGlobalVariable("$+"));
++        runtime.defineVariable(new BackRefGlobalVariable("$~"));
++
++        // On platforms without a c-library accessable through JNA, getpid will return hashCode
+         // as $$ used to. Using $$ to kill processes could take down many runtimes, but by basing
+         // $$ on getpid() where available, we have the same semantics as MRI.
+-        runtime.getGlobalVariables().defineReadonly("$$", new ValueAccessor(runtime.newFixnum(runtime.getPosix().getpid())));
++        RubyFixnum pid = runtime.newFixnum(runtime.getPosix().getpid());
++        runtime.getGlobalVariables().defineReadonly("$$", new RuntimeVariableAccessor("$$", pid));
+ 
+         // after defn of $stderr as the call may produce warnings
+         defineGlobalEnvConstants(runtime);
+-        
+-        // Fixme: Do we need the check or does Main.java not call this...they should consolidate 
+-        if (runtime.getGlobalVariables().get("$*").isNil()) {
+-            runtime.getGlobalVariables().defineReadonly("$*", new ValueAccessor(runtime.newArray()));
+-        }
+-        
+-        runtime.getGlobalVariables().defineReadonly("$-p", 
+-                new ValueAccessor(runtime.getInstanceConfig().isAssumePrinting() ? runtime.getTrue() : runtime.getNil()));
+-        runtime.getGlobalVariables().defineReadonly("$-n", 
+-                new ValueAccessor(runtime.getInstanceConfig().isAssumeLoop() ? runtime.getTrue() : runtime.getNil()));
+-        runtime.getGlobalVariables().defineReadonly("$-a", 
+-                new ValueAccessor(runtime.getInstanceConfig().isSplit() ? runtime.getTrue() : runtime.getNil()));
+-        runtime.getGlobalVariables().defineReadonly("$-l", 
+-                new ValueAccessor(runtime.getInstanceConfig().isProcessLineEnds() ? runtime.getTrue() : runtime.getNil()));
+ 
++        IRubyObject assumePrinting = runtime.getInstanceConfig().isAssumePrinting() ? runtime.getTrue() : runtime.getNil();
++        runtime.getGlobalVariables().defineReadonly("$-p", new RuntimeVariableAccessor("$-p", assumePrinting));
++
++        IRubyObject assumeLoop = runtime.getInstanceConfig().isAssumeLoop() ? runtime.getTrue() : runtime.getNil();
++        runtime.getGlobalVariables().defineReadonly("$-n", new RuntimeVariableAccessor("$-n", assumeLoop));
++
++        IRubyObject split = runtime.getInstanceConfig().isSplit() ? runtime.getTrue() : runtime.getNil();
++        runtime.getGlobalVariables().defineReadonly("$-a", new RuntimeVariableAccessor("$-a", split));
++
++        IRubyObject processLineEnds = runtime.getInstanceConfig().isProcessLineEnds() ? runtime.getTrue() : runtime.getNil();
++        runtime.getGlobalVariables().defineReadonly("$-l", new RuntimeVariableAccessor("S-l", processLineEnds));
++
+         // ARGF, $< object
+         RubyArgsFile.initArgsFile(runtime);
+     }
+@@ -254,10 +251,10 @@
+     	try {
+     		environmentVariableMap = environment.getEnvironmentVariableMap(runtime);
+     	} catch (OSEnvironmentReaderExcepton e) {
+-    		// If the environment variables are not accessible shouldn't terminate 
++    		// If the environment variables are not accessible shouldn't terminate
+     		runtime.getWarnings().warn(ID.MISCELLANEOUS, e.getMessage());
+     	}
+-		
++
+     	if (environmentVariableMap == null) {
+             // if the environment variables can't be obtained, define an empty ENV
+     		environmentVariableMap = new HashMap();
+@@ -272,103 +269,109 @@
+         Map systemProps = environment.getSystemPropertiesMap(runtime);
+         runtime.defineGlobalConstant("ENV_JAVA", new StringOnlyRubyHash(
+                 runtime, systemProps, runtime.getNil()));
+-        
++
+     }
+ 
++    private static Ruby getRuntime() {
++        return Ruby.getCurrentRuntime();
++    }
++
+     private static class NonEffectiveGlobalVariable extends GlobalVariable {
+-        public NonEffectiveGlobalVariable(Ruby runtime, String name, IRubyObject value) {
+-            super(runtime, name, value);
++        public NonEffectiveGlobalVariable(String name, IRubyObject value) {
++            super(name, value);
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject value) {
+-            runtime.getWarnings().warn(ID.INEFFECTIVE_GLOBAL, "warning: variable " + name + " is no longer effective; ignored", name);
++            getRuntime().getWarnings().warn(ID.INEFFECTIVE_GLOBAL, "warning: variable " + name + " is no longer effective; ignored", name);
+             return value;
+         }
+ 
++
+         @Override
+         public IRubyObject get() {
+-            runtime.getWarnings().warn(ID.INEFFECTIVE_GLOBAL, "warning: variable " + name + " is no longer effective", name);
+-            return runtime.getFalse();
++            getRuntime().getWarnings().warn(ID.INEFFECTIVE_GLOBAL, "warning: variable " + name + " is no longer effective", name);
++            return getRuntime().getFalse();
+         }
++
+     }
+ 
+     private static class LastExitStatusVariable extends GlobalVariable {
+-        public LastExitStatusVariable(Ruby runtime, String name) {
+-            super(runtime, name, runtime.getNil());
++        public LastExitStatusVariable(String name) {
++            super(name, getRuntime().getNil());
+         }
+-        
++
+         @Override
+         public IRubyObject get() {
+-            IRubyObject lastExitStatus = runtime.getCurrentContext().getLastExitStatus();
+-            return lastExitStatus == null ? runtime.getNil() : lastExitStatus;
++            IRubyObject lastExitStatus = getRuntime().getCurrentContext().getLastExitStatus();
++            return lastExitStatus == null ? getRuntime().getNil() : lastExitStatus;
+         }
+-        
++
+         @Override
+         public IRubyObject set(IRubyObject lastExitStatus) {
+-            runtime.getCurrentContext().setLastExitStatus(lastExitStatus);
+-            
++            getRuntime().getCurrentContext().setLastExitStatus(lastExitStatus);
++
+             return lastExitStatus;
+         }
+     }
+ 
+     private static class MatchMatchGlobalVariable extends GlobalVariable {
+-        public MatchMatchGlobalVariable(Ruby runtime, String name) {
+-            super(runtime, name, runtime.getNil());
++        public MatchMatchGlobalVariable(String name) {
++            super(name, getRuntime().getNil());
+         }
+-        
++
+         @Override
+         public IRubyObject get() {
+-            return RubyRegexp.last_match(runtime.getCurrentContext().getCurrentFrame().getBackRef());
++            return RubyRegexp.last_match(getRuntime().getCurrentContext().getCurrentFrame().getBackRef());
+         }
+     }
+ 
+     private static class PreMatchGlobalVariable extends GlobalVariable {
+-        public PreMatchGlobalVariable(Ruby runtime, String name) {
+-            super(runtime, name, runtime.getNil());
++        public PreMatchGlobalVariable(String name) {
++            super(name, getRuntime().getNil());
+         }
+-        
++
+         @Override
+         public IRubyObject get() {
+-            return RubyRegexp.match_pre(runtime.getCurrentContext().getCurrentFrame().getBackRef());
++            return RubyRegexp.match_pre(getRuntime().getCurrentContext().getCurrentFrame().getBackRef());
+         }
+     }
+ 
+     private static class PostMatchGlobalVariable extends GlobalVariable {
+-        public PostMatchGlobalVariable(Ruby runtime, String name) {
+-            super(runtime, name, runtime.getNil());
++        public PostMatchGlobalVariable(String name) {
++            super(name, getRuntime().getNil());
+         }
+-        
++
+         @Override
+         public IRubyObject get() {
+-            return RubyRegexp.match_post(runtime.getCurrentContext().getCurrentFrame().getBackRef());
++            return RubyRegexp.match_post(getRuntime().getCurrentContext().getCurrentFrame().getBackRef());
+         }
+     }
+ 
+     private static class LastMatchGlobalVariable extends GlobalVariable {
+-        public LastMatchGlobalVariable(Ruby runtime, String name) {
+-            super(runtime, name, runtime.getNil());
++        public LastMatchGlobalVariable(String name) {
++            super(name, getRuntime().getNil());
+         }
+-        
++
+         @Override
+         public IRubyObject get() {
+-            return RubyRegexp.match_last(runtime.getCurrentContext().getCurrentFrame().getBackRef());
++            return RubyRegexp.match_last(getRuntime().getCurrentContext().getCurrentFrame().getBackRef());
+         }
+     }
+ 
+     private static class BackRefGlobalVariable extends GlobalVariable {
+-        public BackRefGlobalVariable(Ruby runtime, String name) {
+-            super(runtime, name, runtime.getNil());
++        public BackRefGlobalVariable(String name) {
++            super(name, getRuntime().getNil());
+         }
+-        
++
+         @Override
+         public IRubyObject get() {
+-            return RuntimeHelpers.getBackref(runtime, runtime.getCurrentContext());
++            return RuntimeHelpers.getBackref(getRuntime(), getRuntime().getCurrentContext());
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject value) {
+-            RuntimeHelpers.setBackref(runtime, runtime.getCurrentContext(), value);
++            RuntimeHelpers.setBackref(getRuntime(), getRuntime().getCurrentContext(), value);
+             return value;
+         }
+     }
+@@ -376,113 +379,113 @@
+     // Accessor methods.
+ 
+     private static class LineNumberGlobalVariable extends GlobalVariable {
+-        public LineNumberGlobalVariable(Ruby runtime, String name, RubyFixnum value) {
+-            super(runtime, name, value);
++        public LineNumberGlobalVariable(String name, RubyFixnum value) {
++            super(name, value);
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject value) {
+-            RubyArgsFile.setCurrentLineNumber(runtime.getGlobalVariables().get("$<"),RubyNumeric.fix2int(value));
++            RubyArgsFile.setCurrentLineNumber(getRuntime().getGlobalVariables().get("$<"),RubyNumeric.fix2int(value));
+             return super.set(value);
+         }
+     }
+ 
+     private static class ErrorInfoGlobalVariable extends GlobalVariable {
+-        public ErrorInfoGlobalVariable(Ruby runtime, String name, IRubyObject value) {
+-            super(runtime, name, null);
++        public ErrorInfoGlobalVariable(String name, IRubyObject value) {
++            super(name, null);
+             set(value);
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject value) {
+             if (!value.isNil() &&
+-                    !runtime.getException().isInstance(value) &&
++                    !getRuntime().getException().isInstance(value) &&
+                     !(JavaUtil.isJavaObject(value) && JavaUtil.unwrapJavaObject(value) instanceof Exception)) {
+-                throw runtime.newTypeError("assigning non-exception to $!");
++                throw getRuntime().newTypeError("assigning non-exception to $!");
+             }
+-            
+-            return runtime.getCurrentContext().setErrorInfo(value);
++
++            return getRuntime().getCurrentContext().setErrorInfo(value);
+         }
+ 
+         @Override
+         public IRubyObject get() {
+-            return runtime.getCurrentContext().getErrorInfo();
++            return getRuntime().getCurrentContext().getErrorInfo();
+         }
+     }
+ 
+     // FIXME: move out of this class!
+     public static class StringGlobalVariable extends GlobalVariable {
+-        public StringGlobalVariable(Ruby runtime, String name, IRubyObject value) {
+-            super(runtime, name, value);
++        public StringGlobalVariable(String name, IRubyObject value) {
++            super(name, value);
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject value) {
+             if (!value.isNil() && ! (value instanceof RubyString)) {
+-                throw runtime.newTypeError("value of " + name() + " must be a String");
++                throw getRuntime().newTypeError("value of " + name() + " must be a String");
+             }
+             return super.set(value);
+         }
+     }
+ 
+     public static class KCodeGlobalVariable extends GlobalVariable {
+-        public KCodeGlobalVariable(Ruby runtime, String name, IRubyObject value) {
+-            super(runtime, name, value);
++        public KCodeGlobalVariable(String name, IRubyObject value) {
++            super(name, value);
+         }
+ 
+         @Override
+         public IRubyObject get() {
+-            return runtime.getKCode().kcode(runtime);
++            return getRuntime().getKCode().kcode(getRuntime());
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject value) {
+-            runtime.setKCode(KCode.create(runtime, value.convertToString().toString()));
++            getRuntime().setKCode(KCode.create(getRuntime(), value.convertToString().toString()));
+             return value;
+         }
+     }
+ 
+     private static class SafeGlobalVariable extends GlobalVariable {
+-        public SafeGlobalVariable(Ruby runtime, String name) {
+-            super(runtime, name, null);
++        public SafeGlobalVariable(String name) {
++            super(name, null);
+         }
+ 
+         @Override
+         public IRubyObject get() {
+-            return runtime.newFixnum(runtime.getSafeLevel());
++            return getRuntime().newFixnum(getRuntime().getSafeLevel());
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject value) {
+ //            int level = RubyNumeric.fix2int(value);
+-//            if (level < runtime.getSafeLevel()) {
+-//            	throw runtime.newSecurityError("tried to downgrade safe level from " + 
+-//            			runtime.getSafeLevel() + " to " + level);
++//            if (level < getRuntime().getSafeLevel()) {
++//            	throw getRuntime().newSecurityError("tried to downgrade safe level from " +
++//            			getRuntime().getSafeLevel() + " to " + level);
+ //            }
+-//            runtime.setSafeLevel(level);
++//            getRuntime().setSafeLevel(level);
+             // thread.setSafeLevel(level);
+-            runtime.getWarnings().warn(ID.SAFE_NOT_SUPPORTED, "SAFE levels are not supported in JRuby");
+-            return RubyFixnum.newFixnum(runtime, runtime.getSafeLevel());
++            getRuntime().getWarnings().warn(ID.SAFE_NOT_SUPPORTED, "SAFE levels are not supported in JRuby");
++            return RubyFixnum.newFixnum(getRuntime(), getRuntime().getSafeLevel());
+         }
+     }
+ 
+     private static class VerboseGlobalVariable extends GlobalVariable {
+-        public VerboseGlobalVariable(Ruby runtime, String name, IRubyObject initialValue) {
+-            super(runtime, name, initialValue);
++        public VerboseGlobalVariable(String name, IRubyObject initialValue) {
++            super(name, initialValue);
+             set(initialValue);
+         }
+-        
++
+         @Override
+         public IRubyObject get() {
+-            return runtime.getVerbose();
++            return getRuntime().getVerbose();
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject newValue) {
+             if (newValue.isNil()) {
+-                runtime.setVerbose(newValue);
++                getRuntime().setVerbose(newValue);
+             } else {
+-                runtime.setVerbose(runtime.newBoolean(newValue.isTrue()));
++                getRuntime().setVerbose(getRuntime().newBoolean(newValue.isTrue()));
+             }
+ 
+             return newValue;
+@@ -490,22 +493,22 @@
+     }
+ 
+     private static class DebugGlobalVariable extends GlobalVariable {
+-        public DebugGlobalVariable(Ruby runtime, String name, IRubyObject initialValue) {
+-            super(runtime, name, initialValue);
++        public DebugGlobalVariable(String name, IRubyObject initialValue) {
++            super(name, initialValue);
+             set(initialValue);
+         }
+ 
+         @Override
+         public IRubyObject get() {
+-            return runtime.getDebug();
++            return getRuntime().getDebug();
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject newValue) {
+             if (newValue.isNil()) {
+-                runtime.setDebug(newValue);
++                getRuntime().setDebug(newValue);
+             } else {
+-                runtime.setDebug(runtime.newBoolean(newValue.isTrue()));
++                getRuntime().setDebug(getRuntime().newBoolean(newValue.isTrue()));
+             }
+ 
+             return newValue;
+@@ -513,115 +516,103 @@
+     }
+ 
+     private static class BacktraceGlobalVariable extends GlobalVariable {
+-        public BacktraceGlobalVariable(Ruby runtime, String name) {
+-            super(runtime, name, null);
++        public BacktraceGlobalVariable(String name) {
++            super(name, null);
+         }
+ 
+         @Override
+         public IRubyObject get() {
+-            IRubyObject errorInfo = runtime.getGlobalVariables().get("$!");
+-            IRubyObject backtrace = errorInfo.isNil() ? runtime.getNil() : errorInfo.callMethod(errorInfo.getRuntime().getCurrentContext(), "backtrace");
++            IRubyObject errorInfo = getRuntime().getGlobalVariables().get("$!");
++            IRubyObject backtrace = errorInfo.isNil() ? getRuntime().getNil() : errorInfo.callMethod(errorInfo.getRuntime().getCurrentContext(), "backtrace");
+             //$@ returns nil if $!.backtrace is not an array
+             if (!(backtrace instanceof RubyArray)) {
+-                backtrace = runtime.getNil();
++                backtrace = getRuntime().getNil();
+             }
+             return backtrace;
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject value) {
+-            if (runtime.getGlobalVariables().get("$!").isNil()) {
+-                throw runtime.newArgumentError("$! not set.");
++            if (getRuntime().getGlobalVariables().get("$!").isNil()) {
++                throw getRuntime().newArgumentError("$! not set.");
+             }
+-            runtime.getGlobalVariables().get("$!").callMethod(value.getRuntime().getCurrentContext(), "set_backtrace", value);
++            getRuntime().getGlobalVariables().get("$!").callMethod(value.getRuntime().getCurrentContext(), "set_backtrace", value);
+             return value;
+         }
+     }
+ 
+     private static class LastlineGlobalVariable extends GlobalVariable {
+-        public LastlineGlobalVariable(Ruby runtime, String name) {
+-            super(runtime, name, null);
++        public LastlineGlobalVariable(String name) {
++            super(name, null);
+         }
+ 
+         @Override
+         public IRubyObject get() {
+-            return RuntimeHelpers.getLastLine(runtime, runtime.getCurrentContext());
++            return RuntimeHelpers.getLastLine(getRuntime(), getRuntime().getCurrentContext());
+         }
+ 
+         @Override
+         public IRubyObject set(IRubyObject value) {
+-            RuntimeHelpers.setLastLine(runtime, runtime.getCurrentContext(), value);
++            RuntimeHelpers.setLastLine(getRuntime(), getRuntime().getCurrentContext(), value);
+             return value;
+         }
+     }
+ 
+-    private static class InputGlobalVariable extends GlobalVariable {
+-        public InputGlobalVariable(Ruby runtime, String name, IRubyObject value) {
+-            super(runtime, name, value);
+-        }
++    private static class RuntimeOutputAccessor extends RuntimeVariableAccessor {
++        private final String name;
+ 
+-        @Override
+-        public IRubyObject set(IRubyObject value) {
+-            if (value == get()) {
+-                return value;
+-            }
+-            
+-            return super.set(value);
++        public RuntimeOutputAccessor(String name, IRubyObject value) {
++            super(name, value);
++            this.name = name;
+         }
+-    }
+ 
+-    private static class OutputGlobalVariable extends GlobalVariable {
+-        public OutputGlobalVariable(Ruby runtime, String name, IRubyObject value) {
+-            super(runtime, name, value);
+-        }
+-
+         @Override
+-        public IRubyObject set(IRubyObject value) {
+-            if (value == get()) {
+-                return value;
++        public IRubyObject setValue(IRubyObject newValue) {
++            if (newValue == getValue()) {
++                return newValue;
+             }
+-            if (value instanceof RubyIO) {
+-                RubyIO io = (RubyIO)value;
+-                
++            if (newValue instanceof RubyIO) {
++                RubyIO io = (RubyIO)newValue;
++
+                 // HACK: in order to have stdout/err act like ttys and flush always,
+                 // we set anything assigned to stdout/stderr to sync
+                 io.getHandler().setSync(true);
+             }
+ 
+-            if (!value.respondsTo("write")) {
+-                throw runtime.newTypeError(name() + " must have write method, " +
+-                                    value.getType().getName() + " given");
++            if (!newValue.respondsTo("write")) {
++                throw getRuntime().newTypeError(name + " must have write method, " +
++                                    newValue.getType().getName() + " given");
+             }
+ 
+-            return super.set(value);
++            return super.setValue(newValue);
+         }
+     }
+ 
+     private static class LoadPath extends ReadonlyGlobalVariable {
+-        public LoadPath(Ruby runtime, String name) {
+-            super(runtime, name, null);
++        public LoadPath(String name) {
++            super(name, null);
+         }
+-        
++
+         /**
+          * @see org.jruby.runtime.GlobalVariable#get()
+          */
+         @Override
+         public IRubyObject get() {
+-            return runtime.getLoadService().getLoadPath();
++            return getRuntime().getLoadService().getLoadPath();
+         }
+     }
+ 
+     private static class LoadedFeatures extends ReadonlyGlobalVariable {
+-        public LoadedFeatures(Ruby runtime, String name) {
+-            super(runtime, name, null);
++        public LoadedFeatures(String name) {
++            super(name, null);
+         }
+-        
++
+         /**
+          * @see org.jruby.runtime.GlobalVariable#get()
+          */
+         @Override
+         public IRubyObject get() {
+-            return runtime.getLoadService().getLoadedFeatures();
++            return getRuntime().getLoadService().getLoadedFeatures();
+         }
+     }
+ }
+Index: src/org/jruby/RubyClass.java
+===================================================================
+--- src/org/jruby/RubyClass.java	(revision 8091)
++++ src/org/jruby/RubyClass.java	(working copy)
+@@ -54,6 +54,8 @@
+ import org.jruby.runtime.marshal.MarshalStream;
+ import org.jruby.runtime.marshal.UnmarshalStream;
+ import org.jruby.util.collections.WeakHashSet;
++import org.jruby.util.RuntimeContainer;
++import org.jruby.util.JRubyClassLoader;
+ 
+ /**
+  *
+@@ -74,7 +76,7 @@
+     
+     private CallSite[] extraCallSites;
+     
+-    public static void createClassClass(Ruby runtime, RubyClass classClass) {
++    public static void createClassClass(RubyClass classClass) {
+         classClass.index = ClassIndex.CLASS;
+         classClass.kindOf = new RubyModule.KindOf() {
+             @Override
+@@ -116,9 +118,9 @@
+ 
+     @JRubyMethod(name = "allocate")
+     public IRubyObject allocate() {
+-        if (superClass == null) throw runtime.newTypeError("can't instantiate uninitialized class");
+-        IRubyObject obj = allocator.allocate(runtime, this);
+-        if (obj.getMetaClass().getRealClass() != getRealClass()) throw runtime.newTypeError("wrong instance allocation");
++        if (superClass == null) throw getRuntime().newTypeError("can't instantiate uninitialized class");
++        IRubyObject obj = allocator.allocate(getRuntime(), this);
++        if (obj.getMetaClass().getRealClass() != getRealClass()) throw getRuntime().newTypeError("wrong instance allocation");
+         return obj;
+     }
+ 
+@@ -171,7 +173,6 @@
+         return obj;
+     }
+ 
+-    private final Ruby runtime;
+     private ObjectAllocator allocator; // the default allocator
+     protected ObjectMarshal marshal;
+     private Set<RubyClass> subclasses;
+@@ -182,7 +183,6 @@
+      */
+     protected RubyClass(Ruby runtime, RubyClass superClass, boolean objectSpace) {
+         super(runtime, runtime.getClassClass(), objectSpace);
+-        this.runtime = runtime;
+         this.superClass = superClass; // this is the only case it might be null here (in MetaClass construction)
+     }
+ 
+@@ -192,7 +192,6 @@
+      */
+     protected RubyClass(Ruby runtime, RubyClass superClass, Generation generation, boolean objectSpace) {
+         super(runtime, runtime.getClassClass(), generation, objectSpace);
+-        this.runtime = runtime;
+         this.superClass = superClass; // this is the only case it might be null here (in MetaClass construction)
+     }
+     
+@@ -201,7 +200,6 @@
+      */
+     protected RubyClass(Ruby runtime) {
+         super(runtime, runtime.getClassClass());
+-        this.runtime = runtime;
+         index = ClassIndex.CLASS;
+     }
+     
+@@ -624,7 +622,7 @@
+     @JRubyMethod(name = "initialize_copy", required = 1, visibility = Visibility.PRIVATE)
+     @Override
+     public IRubyObject initialize_copy(IRubyObject original){
+-        if (superClass != null) throw runtime.newTypeError("already initialized class");
++        if (superClass != null) throw getRuntime().newTypeError("already initialized class");
+         if (original instanceof MetaClass) throw getRuntime().newTypeError("can't copy singleton class");        
+         
+         super.initialize_copy(original);
+@@ -675,7 +673,7 @@
+     }
+     
+     public Ruby getClassRuntime() {
+-            return runtime;
++        return Ruby.getCurrentRuntime();
+     }
+ 
+     public RubyClass getRealClass() {
+Index: src/org/jruby/RubyIO.java
+===================================================================
+--- src/org/jruby/RubyIO.java	(revision 8091)
++++ src/org/jruby/RubyIO.java	(working copy)
+@@ -85,22 +85,22 @@
+ import static org.jruby.RubyEnumerator.enumeratorize;
+ 
+ /**
+- * 
++ *
+  * @author jpetersen
+  */
+ @JRubyClass(name="IO", include="Enumerable")
+ public class RubyIO extends RubyObject {
+     protected OpenFile openFile;
+     protected List<RubyThread> blockingThreads;
+-    
++
+     public void registerDescriptor(ChannelDescriptor descriptor) {
+         getRuntime().getDescriptors().put(new Integer(descriptor.getFileno()), new WeakReference<ChannelDescriptor>(descriptor));
+     }
+-    
++
+     public void unregisterDescriptor(int aFileno) {
+         getRuntime().getDescriptors().remove(new Integer(aFileno));
+     }
+-    
++
+     public ChannelDescriptor getDescriptorByFileno(int aFileno) {
+         Reference<ChannelDescriptor> reference = getRuntime().getDescriptors().get(new Integer(aFileno));
+         if (reference == null) {
+@@ -108,10 +108,10 @@
+         }
+         return reference.get();
+     }
+-    
++
+     // FIXME can't use static; would interfere with other runtimes in the same JVM
+     protected static AtomicInteger filenoIndex = new AtomicInteger(2);
+-    
++
+     public static int getNewFileno() {
+         return filenoIndex.incrementAndGet();
+     }
+@@ -120,77 +120,77 @@
+     // It allows this object to be created without a IOHandler.
+     public RubyIO(Ruby runtime, RubyClass type) {
+         super(runtime, type);
+-        
++
+         openFile = new OpenFile();
+     }
+ 
+     public RubyIO(Ruby runtime, OutputStream outputStream) {
+         super(runtime, runtime.getIO());
+-        
+-        // We only want IO objects with valid streams (better to error now). 
++
++        // We only want IO objects with valid streams (better to error now).
+         if (outputStream == null) {
+             throw runtime.newRuntimeError("Opening null stream");
+         }
+-        
++
+         openFile = new OpenFile();
+-        
++
+         try {
+-            openFile.setMainStream(new ChannelStream(runtime, new ChannelDescriptor(Channels.newChannel(outputStream), getNewFileno(), new FileDescriptor())));
++            openFile.setMainStream(new ChannelStream(new ChannelDescriptor(Channels.newChannel(outputStream), getNewFileno(), new FileDescriptor())));
+         } catch (InvalidValueException e) {
+             throw getRuntime().newErrnoEINVALError();
+         }
+-        
++
+         openFile.setMode(OpenFile.WRITABLE | OpenFile.APPEND);
+-        
++
+         registerDescriptor(openFile.getMainStream().getDescriptor());
+     }
+-    
++
+     public RubyIO(Ruby runtime, InputStream inputStream) {
+         super(runtime, runtime.getIO());
+-        
++
+         if (inputStream == null) {
+             throw runtime.newRuntimeError("Opening null stream");
+         }
+-        
++
+         openFile = new OpenFile();
+-        
++
+         try {
+-            openFile.setMainStream(new ChannelStream(runtime, new ChannelDescriptor(Channels.newChannel(inputStream), getNewFileno(), new FileDescriptor())));
++            openFile.setMainStream(new ChannelStream(new ChannelDescriptor(Channels.newChannel(inputStream), getNewFileno(), new FileDescriptor())));
+         } catch (InvalidValueException e) {
+             throw getRuntime().newErrnoEINVALError();
+         }
+-        
++
+         openFile.setMode(OpenFile.READABLE);
+-        
++
+         registerDescriptor(openFile.getMainStream().getDescriptor());
+     }
+-    
++
+     public RubyIO(Ruby runtime, Channel channel) {
+         super(runtime, runtime.getIO());
+-        
+-        // We only want IO objects with valid streams (better to error now). 
++
++        // We only want IO objects with valid streams (better to error now).
+         if (channel == null) {
+             throw runtime.newRuntimeError("Opening null channelpo");
+         }
+-        
++
+         openFile = new OpenFile();
+-        
++
+         try {
+-            openFile.setMainStream(new ChannelStream(runtime, new ChannelDescriptor(channel, getNewFileno(), new FileDescriptor())));
++            openFile.setMainStream(new ChannelStream(new ChannelDescriptor(channel, getNewFileno(), new FileDescriptor())));
+         } catch (InvalidValueException e) {
+             throw getRuntime().newErrnoEINVALError();
+         }
+-        
++
+         openFile.setMode(openFile.getMainStream().getModes().getOpenFileFlags());
+-        
++
+         registerDescriptor(openFile.getMainStream().getDescriptor());
+     }
+ 
+     public RubyIO(Ruby runtime, ShellLauncher.POpenProcess process, ModeFlags modes) {
+     	super(runtime, runtime.getIO());
+-        
++
+         openFile = new OpenFile();
+-        
++
+         openFile.setMode(modes.getOpenFileFlags() | OpenFile.SYNC);
+         openFile.setProcess(process);
+ 
+@@ -204,17 +204,17 @@
+                     // Stream-based
+                     inChannel = Channels.newChannel(process.getInputStream());
+                 }
+-                
++
+                 ChannelDescriptor main = new ChannelDescriptor(
+                         inChannel,
+                         getNewFileno(),
+                         new FileDescriptor());
+                 main.setCanBeSeekable(false);
+-                
+-                openFile.setMainStream(new ChannelStream(getRuntime(), main));
++
++                openFile.setMainStream(new ChannelStream(main));
+                 registerDescriptor(main);
+             }
+-            
++
+             if (openFile.isWritable()) {
+                 Channel outChannel;
+                 if (process.getOutput() != null) {
+@@ -229,23 +229,23 @@
+                         getNewFileno(),
+                         new FileDescriptor());
+                 pipe.setCanBeSeekable(false);
+-                
++
+                 if (openFile.getMainStream() != null) {
+-                    openFile.setPipeStream(new ChannelStream(getRuntime(), pipe));
++                    openFile.setPipeStream(new ChannelStream(pipe));
+                 } else {
+-                    openFile.setMainStream(new ChannelStream(getRuntime(), pipe));
++                    openFile.setMainStream(new ChannelStream(pipe));
+                 }
+-                
++
+                 registerDescriptor(pipe);
+             }
+         } catch (InvalidValueException e) {
+             throw getRuntime().newErrnoEINVALError();
+         }
+     }
+-    
++
+     public RubyIO(Ruby runtime, STDIO stdio) {
+         super(runtime, runtime.getIO());
+-        
++
+         openFile = new OpenFile();
+ 
+         try {
+@@ -253,15 +253,13 @@
+             case IN:
+                 openFile.setMainStream(
+                         new ChannelStream(
+-                            runtime, 
+                             // special constructor that accepts stream, not channel
+-                            new ChannelDescriptor(runtime.getIn(), 0, new ModeFlags(ModeFlags.RDONLY), FileDescriptor.in),
++                            new ChannelDescriptor(Channels.newChannel(runtime.getIn()), 0, new ModeFlags(ModeFlags.RDONLY), FileDescriptor.in),
+                             FileDescriptor.in));
+                 break;
+             case OUT:
+                 openFile.setMainStream(
+                         new ChannelStream(
+-                            runtime, 
+                             new ChannelDescriptor(Channels.newChannel(runtime.getOut()), 1, new ModeFlags(ModeFlags.WRONLY | ModeFlags.APPEND), FileDescriptor.out),
+                             FileDescriptor.out));
+                 openFile.getMainStream().setSync(true);
+@@ -269,8 +267,7 @@
+             case ERR:
+                 openFile.setMainStream(
+                         new ChannelStream(
+-                            runtime, 
+-                            new ChannelDescriptor(Channels.newChannel(runtime.getErr()), 2, new ModeFlags(ModeFlags.WRONLY | ModeFlags.APPEND), FileDescriptor.err), 
++                            new ChannelDescriptor(Channels.newChannel(runtime.getErr()), 2, new ModeFlags(ModeFlags.WRONLY | ModeFlags.APPEND), FileDescriptor.err),
+                             FileDescriptor.err));
+                 openFile.getMainStream().setSync(true);
+                 break;
+@@ -278,25 +275,25 @@
+         } catch (InvalidValueException ex) {
+             throw getRuntime().newErrnoEINVALError();
+         }
+-        
++
+         openFile.setMode(openFile.getMainStream().getModes().getOpenFileFlags());
+-        
+-        registerDescriptor(openFile.getMainStream().getDescriptor());        
++
++        registerDescriptor(openFile.getMainStream().getDescriptor());
+     }
+-    
++
+     public static RubyIO newIO(Ruby runtime, Channel channel) {
+         return new RubyIO(runtime, channel);
+     }
+-    
++
+     public OpenFile getOpenFile() {
+         return openFile;
+     }
+-    
++
+     protected OpenFile getOpenFileChecked() {
+         openFile.checkClosed(getRuntime());
+         return openFile;
+     }
+-    
++
+     private static ObjectAllocator IO_ALLOCATOR = new ObjectAllocator() {
+         public IRubyObject allocate(Ruby runtime, RubyClass klass) {
+             return new RubyIO(runtime, klass);
+@@ -313,12 +310,12 @@
+         };
+ 
+         ioClass.includeModule(runtime.getEnumerable());
+-        
++
+         // TODO: Implement tty? and isatty.  We have no real capability to
+         // determine this from java, but if we could set tty status, then
+         // we could invoke jruby differently to allow stdin to return true
+         // on this.  This would allow things like cgi.rb to work properly.
+-        
++
+         ioClass.defineAnnotatedMethods(RubyIO.class);
+ 
+         // Constants for seek
+@@ -344,7 +341,7 @@
+             return null;
+         }
+     }
+-    
++
+     public Stream getHandler() {
+         return getOpenFileChecked().getMainStream();
+     }
+@@ -352,13 +349,13 @@
+     @JRubyMethod(name = "reopen", required = 1, optional = 1)
+     public IRubyObject reopen(ThreadContext context, IRubyObject[] args) throws InvalidValueException {
+         Ruby runtime = context.getRuntime();
+-        
++
+     	if (args.length < 1) {
+             throw runtime.newArgumentError("wrong number of arguments");
+     	}
+-    	
++
+     	IRubyObject tmp = TypeConverter.convertToTypeWithCheck(args[0], runtime.getIO(), "to_io");
+-        
++
+     	if (!tmp.isNil()) {
+             try {
+                 RubyIO ios = (RubyIO) tmp;
+@@ -399,10 +396,10 @@
+                     // check if we're a stdio IO, and ensure we're not badly mutilated
+                     if (selfDescriptor.getFileno() >=0 && selfDescriptor.getFileno() <= 2) {
+                         selfFile.getMainStream().clearerr();
+-                        
++
+                         // dup2 new fd into self to preserve fileno and references to it
+                         originalDescriptor.dup2Into(selfDescriptor);
+-                        
++
+                         // re-register, since fileno points at something new now
+                         registerDescriptor(selfDescriptor);
+                     } else {
+@@ -422,22 +419,21 @@
+                         } else {
+                             selfFile.setMainStream(
+                                     new ChannelStream(
+-                                        runtime,
+-                                        originalDescriptor.dup2(selfDescriptor.getFileno())));
+-                            
++                                            originalDescriptor.dup2(selfDescriptor.getFileno())));
++
+                             // re-register the descriptor
+                             registerDescriptor(selfFile.getMainStream().getDescriptor());
+-                            
++
+                             // since we're not actually duping the incoming channel into our handler, we need to
+                             // copy the original sync behavior from the other handler
+                             selfFile.getMainStream().setSync(selfFile.getMainStream().isSync());
+                         }
+                         selfFile.setMode(mode);
+                     }
+-                    
++
+                     // TODO: anything threads attached to original fd are notified of the close...
+                     // see rb_thread_fd_close
+-                    
++
+                     if (originalFile.isReadable() && pos >= 0) {
+                         selfFile.seek(pos, Stream.SEEK_SET);
+                         originalFile.seek(pos, Stream.SEEK_SET);
+@@ -446,7 +442,7 @@
+ 
+                 if (selfFile.getPipeStream() != null && selfDescriptor.getFileno() != selfFile.getPipeStream().getDescriptor().getFileno()) {
+                     int fd = selfFile.getPipeStream().getDescriptor().getFileno();
+-                    
++
+                     if (originalFile.getPipeStream() == null) {
+                         selfFile.getPipeStream().fclose();
+                         selfFile.setPipeStream(null);
+@@ -454,17 +450,17 @@
+                         selfFile.getPipeStream().fclose();
+                         ChannelDescriptor newFD2 = originalFile.getPipeStream().getDescriptor().dup2(fd);
+                         selfFile.setPipeStream(ChannelStream.fdopen(runtime, newFD2, getIOModes(runtime, "w")));
+-                        
++
+                         // re-register, since fileno points at something new now
+                         registerDescriptor(newFD2);
+                     }
+                 }
+-                
++
+                 // TODO: restore binary mode
+     //            if (fptr->mode & FMODE_BINMODE) {
+     //                rb_io_binmode(io);
+     //            }
+-                
++
+                 // TODO: set our metaclass to target's class (i.e. scary!)
+ 
+             } catch (IOException ex) { // TODO: better error handling
+@@ -476,13 +472,13 @@
+             }
+         } else {
+             IRubyObject pathString = args[0].convertToString();
+-            
++
+             // TODO: check safe, taint on incoming string
+-            
++
+             if (openFile == null) {
+                 openFile = new OpenFile();
+             }
+-            
++
+             try {
+                 ModeFlags modes;
+                 if (args.length > 1) {
+@@ -495,19 +491,19 @@
+                 }
+ 
+                 String path = pathString.toString();
+-                
++
+                 // Ruby code frequently uses a platform check to choose "NUL:" on windows
+                 // but since that check doesn't work well on JRuby, we help it out
+-                
++
+                 openFile.setPath(path);
+-            
++
+                 if (openFile.getMainStream() == null) {
+                     try {
+                         openFile.setMainStream(ChannelStream.fopen(runtime, path, modes));
+                     } catch (FileExistsException fee) {
+                         throw runtime.newErrnoEEXISTError(path);
+                     }
+-                    
++
+                     registerDescriptor(openFile.getMainStream().getDescriptor());
+                     if (openFile.getPipeStream() != null) {
+                         openFile.getPipeStream().fclose();
+@@ -536,15 +532,15 @@
+             	throw runtime.newErrnoEINVALError();
+             }
+         }
+-        
++
+         // A potentially previously close IO is being 'reopened'.
+         return this;
+     }
+-    
++
+     public static ModeFlags getIOModes(Ruby runtime, String modesString) throws InvalidValueException {
+         return new ModeFlags(getIOModesIntFromString(runtime, modesString));
+     }
+-        
++
+     public static int getIOModesIntFromString(Ruby runtime, String modesString) {
+         int modes = 0;
+         int length = modesString.length();
+@@ -615,11 +611,11 @@
+             boolean isParagraph = separator == Stream.PARAGRAPH_DELIMETER;
+             separator = (separator == Stream.PARAGRAPH_DELIMETER) ?
+                     Stream.PARAGRAPH_SEPARATOR : separator;
+-            
++
+             if (isParagraph) {
+                 swallow('\n');
+             }
+-            
++
+             if (separator == null) {
+                 IRubyObject str = readAll(null);
+                 if (((RubyString)str).getByteList().length() == 0) {
+@@ -637,12 +633,12 @@
+ 
+                 ByteList buf = new ByteList(0);
+                 boolean update = false;
+-                
++
+                 while (true) {
+                     do {
+                         readCheck(readStream);
+                         readStream.clearerr();
+-                        
++
+                         try {
+                             n = readStream.getline(buf, (byte) newline);
+                             c = buf.length() > 0 ? buf.get(buf.length() - 1) & 0xff : -1;
+@@ -661,15 +657,15 @@
+                                 break;
+                             }
+                         }
+-            
++
+                         update = true;
+                     } while (c != newline); // loop until we see the nth separator char
+-                    
++
+                     // if we hit EOF, we're done
+                     if (n == -1) {
+                         break;
+                     }
+-                    
++
+                     // if we've found the last char of the separator,
+                     // and we've found at least as many characters as separator length,
+                     // and the last n characters of our buffer match the separator, we're done
+@@ -678,13 +674,13 @@
+                         break;
+                     }
+                 }
+-                
++
+                 if (isParagraph) {
+                     if (c != -1) {
+                         swallow('\n');
+                     }
+                 }
+-                
++
+                 if (!update) {
+                     return runtime.getNil();
+                 } else {
+@@ -719,25 +715,25 @@
+     protected boolean swallow(int term) throws IOException, BadDescriptorException {
+         Stream readStream = openFile.getMainStream();
+         int c;
+-        
++
+         do {
+             readCheck(readStream);
+-            
++
+             try {
+                 c = readStream.fgetc();
+             } catch (EOFException e) {
+                 c = -1;
+             }
+-            
++
+             if (c != term) {
+                 readStream.ungetc(c);
+                 return true;
+             }
+         } while (c != -1);
+-        
++
+         return false;
+     }
+-    
++
+     public IRubyObject getlineFast(Ruby runtime, int delim) throws IOException, BadDescriptorException {
+         Stream readStream = openFile.getMainStream();
+         int c = -1;
+@@ -754,7 +750,7 @@
+             } catch (EOFException e) {
+                 n = -1;
+             }
+-            
++
+             if (n == -1) {
+                 if (!readStream.isBlocking() && (readStream instanceof ChannelStream)) {
+                     if(!(waitReadable(((ChannelStream)readStream).getDescriptor()))) {
+@@ -765,7 +761,7 @@
+                     break;
+                 }
+             }
+-            
++
+             update = true;
+         } while (c != delim);
+ 
+@@ -783,7 +779,7 @@
+     @JRubyMethod(name = {"new", "for_fd"}, rest = true, frame = true, meta = true)
+     public static IRubyObject newInstance(ThreadContext context, IRubyObject recv, IRubyObject[] args, Block block) {
+         RubyClass klass = (RubyClass)recv;
+-        
++
+         if (block.isGiven()) {
+             String className = klass.getName();
+             context.getRuntime().getWarnings().warn(
+@@ -791,7 +787,7 @@
+                     className + "::new() does not take block; use " + className + "::open() instead",
+                     className + "::open()");
+         }
+-        
++
+         return klass.newInstance(context, args, block);
+     }
+ 
+@@ -799,18 +795,18 @@
+     public IRubyObject initialize(IRubyObject[] args, Block unusedBlock) {
+         int argCount = args.length;
+         ModeFlags modes;
+-        
++
+         int fileno = RubyNumeric.fix2int(args[0]);
+-        
++
+         try {
+             ChannelDescriptor descriptor = getDescriptorByFileno(fileno);
+-            
++
+             if (descriptor == null) {
+                 throw getRuntime().newErrnoEBADFError();
+             }
+-            
++
+             descriptor.checkOpen();
+-            
++
+             if (argCount == 2) {
+                 if (args[1] instanceof RubyFixnum) {
+                     modes = new ModeFlags(RubyFixnum.fix2long(args[1]));
+@@ -823,35 +819,35 @@
+             }
+ 
+             openFile.setMode(modes.getOpenFileFlags());
+-        
++
+             openFile.setMainStream(fdopen(descriptor, modes));
+         } catch (BadDescriptorException ex) {
+             throw getRuntime().newErrnoEBADFError();
+         } catch (InvalidValueException ive) {
+             throw getRuntime().newErrnoEINVALError();
+         }
+-        
++
+         return this;
+     }
+-    
++
+     protected Stream fdopen(ChannelDescriptor existingDescriptor, ModeFlags modes) throws InvalidValueException {
+         // See if we already have this descriptor open.
+         // If so then we can mostly share the handler (keep open
+         // file, but possibly change the mode).
+-        
++
+         if (existingDescriptor == null) {
+             // redundant, done above as well
+-            
++
+             // this seems unlikely to happen unless it's a totally bogus fileno
+             // ...so do we even need to bother trying to create one?
+-            
++
+             // IN FACT, we should probably raise an error, yes?
+             throw getRuntime().newErrnoEBADFError();
+-            
++
+ //            if (mode == null) {
+ //                mode = "r";
+ //            }
+-//            
++//
+ //            try {
+ //                openFile.setMainStream(streamForFileno(getRuntime(), fileno));
+ //            } catch (BadDescriptorException e) {
+@@ -860,7 +856,7 @@
+ //                throw getRuntime().newErrnoEBADFError();
+ //            }
+ //            //modes = new IOModes(getRuntime(), mode);
+-//            
++//
+ //            registerStream(openFile.getMainStream());
+         } else {
+             // We are creating a new IO object that shares the same
+@@ -873,7 +869,7 @@
+     public static IRubyObject open(ThreadContext context, IRubyObject recv, IRubyObject[] args, Block block) {
+         Ruby runtime = context.getRuntime();
+         RubyClass klass = (RubyClass)recv;
+-        
++
+         RubyIO io = (RubyIO)klass.newInstance(context, args, block);
+ 
+         if (block.isGiven()) {
+@@ -901,48 +897,48 @@
+     public IRubyObject binmode() {
+             return this;
+     }
+-    
++
+     /** @deprecated will be removed in 1.2 */
+     protected void checkInitialized() {
+         if (openFile == null) {
+             throw getRuntime().newIOError("uninitialized stream");
+         }
+     }
+-    
++
+     /** @deprecated will be removed in 1.2 */
+     protected void checkClosed() {
+         if (openFile.getMainStream() == null && openFile.getPipeStream() == null) {
+             throw getRuntime().newIOError("closed stream");
+         }
+     }
+-    
++
+     @JRubyMethod(name = "syswrite", required = 1)
+     public IRubyObject syswrite(ThreadContext context, IRubyObject obj) {
+         Ruby runtime = context.getRuntime();
+-        
++
+         try {
+             RubyString string = obj.asString();
+             OpenFile myOpenFile = getOpenFileChecked();
+-            
++
+             myOpenFile.checkWritable(runtime);
+-            
++
+             Stream writeStream = myOpenFile.getWriteStream();
+-            
++
+             if (myOpenFile.isWriteBuffered()) {
+                 runtime.getWarnings().warn(ID.SYSWRITE_BUFFERED_IO, "syswrite for buffered IO");
+             }
+-            
++
+             if (!writeStream.getDescriptor().isWritable()) {
+                 myOpenFile.checkClosed(runtime);
+             }
+-            
++
+             int read = writeStream.getDescriptor().write(string.getByteList());
+-            
++
+             if (read == -1) {
+                 // TODO? I think this ends up propagating from normal Java exceptions
+                 // sys_fail(openFile.getPath())
+             }
+-            
++
+             return runtime.newFixnum(read);
+         } catch (InvalidValueException ex) {
+             throw runtime.newErrnoEINVALError();
+@@ -954,7 +950,7 @@
+             throw runtime.newSystemCallError(e.getMessage());
+         }
+     }
+-    
++
+     @JRubyMethod(name = "write_nonblock", required = 1)
+     public IRubyObject write_nonblock(ThreadContext context, IRubyObject obj) {
+         // MRI behavior: always check whether the file is writable
+@@ -983,27 +979,27 @@
+             throw context.getRuntime().newErrnoEPIPEError();
+         }
+     }
+-    
++
+     /** io_write
+-     * 
++     *
+      */
+     @JRubyMethod(name = "write", required = 1)
+     public IRubyObject write(ThreadContext context, IRubyObject obj) {
+         Ruby runtime = context.getRuntime();
+-        
++
+         runtime.secure(4);
+-        
++
+         RubyString str = obj.asString();
+ 
+         // TODO: Ruby reuses this logic for other "write" behavior by checking if it's an IO and calling write again
+-        
++
+         if (str.getByteList().length() == 0) {
+             return runtime.newFixnum(0);
+         }
+ 
+         try {
+             OpenFile myOpenFile = getOpenFileChecked();
+-            
++
+             myOpenFile.checkWritable(runtime);
+ 
+             int written = fwrite(str.getByteList());
+@@ -1034,13 +1030,13 @@
+         if (channel == null || !(channel instanceof SelectableChannel)) {
+             return false;
+         }
+-       
++
+         Selector selector = Selector.open();
+ 
+         ((SelectableChannel) channel).configureBlocking(false);
+         int real_ops = ((SelectableChannel) channel).validOps() & SelectionKey.OP_WRITE;
+         SelectionKey key = ((SelectableChannel) channel).keyFor(selector);
+-       
++
+         if (key == null) {
+             ((SelectableChannel) channel).register(selector, real_ops, descriptor);
+         } else {
+@@ -1065,13 +1061,13 @@
+         if (channel == null || !(channel instanceof SelectableChannel)) {
+             return false;
+         }
+-       
++
+         Selector selector = Selector.open();
+ 
+         ((SelectableChannel) channel).configureBlocking(false);
+         int real_ops = ((SelectableChannel) channel).validOps() & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT);
+         SelectionKey key = ((SelectableChannel) channel).keyFor(selector);
+-       
++
+         if (key == null) {
+             ((SelectableChannel) channel).register(selector, real_ops, descriptor);
+         } else {
+@@ -1090,14 +1086,14 @@
+         }
+         return false;
+     }
+-    
++
+     protected int fwrite(ByteList buffer) {
+         int n, r, l, offset = 0;
+         boolean eagain = false;
+         Stream writeStream = openFile.getWriteStream();
+ 
+         int len = buffer.length();
+-        
++
+         if ((n = len) <= 0) return n;
+ 
+         try {
+@@ -1108,7 +1104,7 @@
+     //            if (!rb_thread_fd_writable(fileno(f))) {
+     //                rb_io_check_closed(fptr);
+     //            }
+-               
++
+                 while(offset<len) {
+                     l = n;
+ 
+@@ -1188,23 +1184,23 @@
+     }
+ 
+     /** rb_io_addstr
+-     * 
++     *
+      */
+     @JRubyMethod(name = "<<", required = 1)
+     public IRubyObject op_append(ThreadContext context, IRubyObject anObject) {
+         // Claims conversion is done via 'to_s' in docs.
+         callMethod(context, "write", anObject);
+-        
+-        return this; 
++
++        return this;
+     }
+ 
+     @JRubyMethod(name = "fileno", alias = "to_i")
+     public RubyFixnum fileno(ThreadContext context) {
+         return context.getRuntime().newFixnum(getOpenFileChecked().getMainStream().getDescriptor().getFileno());
+     }
+-    
++
+     /** Returns the current line number.
+-     * 
++     *
+      * @return the current line number.
+      */
+     @JRubyMethod(name = "lineno")
+@@ -1213,7 +1209,7 @@
+     }
+ 
+     /** Sets the current line number.
+-     * 
++     *
+      * @param newLineNumber The new line number.
+      */
+     @JRubyMethod(name = "lineno=", required = 1)
+@@ -1224,36 +1220,36 @@
+     }
+ 
+     /** Returns the current sync mode.
+-     * 
++     *
+      * @return the current sync mode.
+      */
+     @JRubyMethod(name = "sync")
+     public RubyBoolean sync(ThreadContext context) {
+         return context.getRuntime().newBoolean(getOpenFileChecked().getMainStream().isSync());
+     }
+-    
++
+     /**
+      * <p>Return the process id (pid) of the process this IO object
+      * spawned.  If no process exists (popen was not called), then
+      * nil is returned.  This is not how it appears to be defined
+      * but ruby 1.8 works this way.</p>
+-     * 
++     *
+      * @return the pid or nil
+      */
+     @JRubyMethod(name = "pid")
+     public IRubyObject pid(ThreadContext context) {
+         OpenFile myOpenFile = getOpenFileChecked();
+-        
++
+         if (myOpenFile.getProcess() == null) {
+             return context.getRuntime().getNil();
+         }
+-        
++
+         // Of course this isn't particularly useful.
+         int pid = myOpenFile.getProcess().hashCode();
+-        
+-        return context.getRuntime().newFixnum(pid); 
++
++        return context.getRuntime().newFixnum(pid);
+     }
+-    
++
+     /**
+      * @deprecated
+      * @return
+@@ -1261,7 +1257,7 @@
+     public boolean writeDataBuffered() {
+         return openFile.getMainStream().writeDataBuffered();
+     }
+-    
++
+     @JRubyMethod(name = {"pos", "tell"})
+     public RubyFixnum pos(ThreadContext context) {
+         try {
+@@ -1276,7 +1272,7 @@
+             throw context.getRuntime().newIOError(e.getMessage());
+         }
+     }
+-    
++
+     @JRubyMethod(name = "pos=", required = 1)
+     public RubyFixnum pos_set(ThreadContext context, IRubyObject newPosition) {
+         long offset = RubyNumeric.num2long(newPosition);
+@@ -1284,9 +1280,9 @@
+         if (offset < 0) {
+             throw context.getRuntime().newSystemCallError("Negative seek offset");
+         }
+-        
++
+         OpenFile myOpenFile = getOpenFileChecked();
+-        
++
+         try {
+             myOpenFile.getMainStream().lseek(offset, Stream.SEEK_SET);
+         } catch (BadDescriptorException e) {
+@@ -1298,14 +1294,14 @@
+         } catch (IOException e) {
+             throw context.getRuntime().newIOError(e.getMessage());
+         }
+-        
++
+         myOpenFile.getMainStream().clearerr();
+-        
++
+         return context.getRuntime().newFixnum(offset);
+     }
+-    
++
+     /** Print some objects to the stream.
+-     * 
++     *
+      */
+     @JRubyMethod(name = "print", rest = true, reads = FrameField.LASTLINE)
+     public IRubyObject print(ThreadContext context, IRubyObject[] args) {
+@@ -1316,7 +1312,7 @@
+         Ruby runtime = context.getRuntime();
+         IRubyObject fs = runtime.getGlobalVariables().get("$,");
+         IRubyObject rs = runtime.getGlobalVariables().get("$\\");
+-        
++
+         for (int i = 0; i < args.length; i++) {
+             if (i > 0 && !fs.isNil()) {
+                 callMethod(context, "write", fs);
+@@ -1344,7 +1340,7 @@
+     public IRubyObject putc(ThreadContext context, IRubyObject object) {
+ 
+         try {
+-            OpenFile myOpenFile = getOpenFileChecked();            
++            OpenFile myOpenFile = getOpenFileChecked();
+             myOpenFile.checkWritable(context.getRuntime());
+             Stream writeStream = myOpenFile.getWriteStream();
+             writeStream.fputc(RubyNumeric.num2chr(object));
+@@ -1365,11 +1361,11 @@
+     public RubyFixnum seek(ThreadContext context, IRubyObject[] args) {
+         long offset = RubyNumeric.num2long(args[0]);
+         int whence = Stream.SEEK_SET;
+-        
++
+         if (args.length > 1) {
+             whence = RubyNumeric.fix2int(args[1].convertToInteger());
+         }
+-        
++
+         return doSeek(context, offset, whence);
+     }
+ 
+@@ -1377,7 +1373,7 @@
+     public RubyFixnum seek(ThreadContext context, IRubyObject arg0) {
+         long offset = RubyNumeric.num2long(arg0);
+         int whence = Stream.SEEK_SET;
+-        
++
+         return doSeek(context, offset, whence);
+     }
+ 
+@@ -1385,13 +1381,13 @@
+     public RubyFixnum seek(ThreadContext context, IRubyObject arg0, IRubyObject arg1) {
+         long offset = RubyNumeric.num2long(arg0);
+         int whence = RubyNumeric.fix2int(arg1.convertToInteger());
+-        
++
+         return doSeek(context, offset, whence);
+     }
+-    
++
+     private RubyFixnum doSeek(ThreadContext context, long offset, int whence) {
+         OpenFile myOpenFile = getOpenFileChecked();
+-        
++
+         try {
+             myOpenFile.seek(offset, whence);
+         } catch (BadDescriptorException ex) {
+@@ -1403,12 +1399,12 @@
+         } catch (IOException e) {
+             throw context.getRuntime().newIOError(e.getMessage());
+         }
+-        
++
+         myOpenFile.getMainStream().clearerr();
+-        
++
+         return RubyFixnum.zero(context.getRuntime());
+     }
+-    
++
+     // This was a getOpt with one mandatory arg, but it did not work
+     // so I am parsing it for now.
+     @JRubyMethod(name = "sysseek", required = 1, optional = 1)
+@@ -1416,22 +1412,22 @@
+         long offset = RubyNumeric.num2long(args[0]);
+         long pos;
+         int whence = Stream.SEEK_SET;
+-        
++
+         if (args.length > 1) {
+             whence = RubyNumeric.fix2int(args[1].convertToInteger());
+         }
+-        
++
+         OpenFile myOpenFile = getOpenFileChecked();
+-        
++
+         try {
+-            
++
+             if (myOpenFile.isReadable() && myOpenFile.isReadBuffered()) {
+                 throw context.getRuntime().newIOError("sysseek for buffered IO");
+             }
+             if (myOpenFile.isWritable() && myOpenFile.isWriteBuffered()) {
+                 context.getRuntime().getWarnings().warn(ID.SYSSEEK_BUFFERED_IO, "sysseek for buffered IO");
+             }
+-            
++
+             pos = myOpenFile.getMainStream().getDescriptor().lseek(offset, whence);
+         } catch (BadDescriptorException ex) {
+             throw context.getRuntime().newErrnoEBADFError();
+@@ -1442,20 +1438,20 @@
+         } catch (IOException e) {
+             throw context.getRuntime().newIOError(e.getMessage());
+         }
+-        
++
+         myOpenFile.getMainStream().clearerr();
+-        
++
+         return context.getRuntime().newFixnum(pos);
+     }
+ 
+     @JRubyMethod(name = "rewind")
+     public RubyFixnum rewind(ThreadContext context) {
+         OpenFile myOpenfile = getOpenFileChecked();
+-        
++
+         try {
+             myOpenfile.getMainStream().lseek(0L, Stream.SEEK_SET);
+             myOpenfile.getMainStream().clearerr();
+-            
++
+             // TODO: This is some goofy global file value from MRI..what to do?
+ //            if (io == current_file) {
+ //                gets_lineno -= fptr->lineno;
+@@ -1472,19 +1468,19 @@
+ 
+         // Must be back on first line on rewind.
+         myOpenfile.setLineNumber(0);
+-        
++
+         return RubyFixnum.zero(context.getRuntime());
+     }
+-    
++
+     @JRubyMethod(name = "fsync")
+     public RubyFixnum fsync(ThreadContext context) {
+         Ruby runtime = context.getRuntime();
+-        
++
+         try {
+             OpenFile myOpenFile = getOpenFileChecked();
+-            
++
+             myOpenFile.checkWritable(runtime);
+-        
++
+             myOpenFile.getWriteStream().sync();
+         } catch (InvalidValueException ex) {
+             throw runtime.newErrnoEINVALError();
+@@ -1500,7 +1496,7 @@
+     }
+ 
+     /** Sets the current sync mode.
+-     * 
++     *
+      * @param newSync The new sync mode.
+      */
+     @JRubyMethod(name = "sync=", required = 1)
+@@ -1514,7 +1510,7 @@
+     @JRubyMethod(name = {"eof?", "eof"})
+     public RubyBoolean eof_p(ThreadContext context) {
+         Ruby runtime = context.getRuntime();
+-        
++
+         try {
+             OpenFile myOpenFile = getOpenFileChecked();
+ 
+@@ -1524,26 +1520,26 @@
+             if (myOpenFile.getMainStream().feof()) {
+                 return runtime.getTrue();
+             }
+-            
++
+             if (myOpenFile.getMainStream().readDataBuffered()) {
+                 return runtime.getFalse();
+             }
+-            
++
+             readCheck(myOpenFile.getMainStream());
+-            
++
+             myOpenFile.getMainStream().clearerr();
+-            
++
+             int c = myOpenFile.getMainStream().fgetc();
+-            
++
+             if (c != -1) {
+                 myOpenFile.getMainStream().ungetc(c);
+                 return runtime.getFalse();
+             }
+-            
++
+             myOpenFile.checkClosed(runtime);
+-            
++
+             myOpenFile.getMainStream().clearerr();
+-            
++
+             return runtime.getTrue();
+         } catch (PipeException ex) {
+             throw runtime.newErrnoEPIPEError();
+@@ -1560,23 +1556,23 @@
+     public RubyBoolean tty_p(ThreadContext context) {
+         return context.getRuntime().newBoolean(context.getRuntime().getPosix().isatty(getOpenFileChecked().getMainStream().getDescriptor().getFileDescriptor()));
+     }
+-    
++
+     @JRubyMethod(name = "initialize_copy", required = 1)
+     @Override
+     public IRubyObject initialize_copy(IRubyObject original){
+         Ruby runtime = getRuntime();
+-        
++
+         if (this == original) return this;
+ 
+         RubyIO originalIO = (RubyIO) TypeConverter.convertToTypeWithCheck(original, runtime.getIO(), "to_io");
+-        
++
+         OpenFile originalFile = originalIO.getOpenFileChecked();
+         OpenFile newFile = openFile;
+-        
++
+         try {
+             // TODO: I didn't see where MRI has this check, but it seems to be the right place
+             originalFile.checkClosed(runtime);
+-            
++
+             if (originalFile.getPipeStream() != null) {
+                 originalFile.getPipeStream().fflush();
+                 originalFile.getMainStream().lseek(0, Stream.SEEK_CUR);
+@@ -1591,7 +1587,7 @@
+             newFile.setLineNumber(originalFile.getLineNumber());
+             newFile.setPath(originalFile.getPath());
+             newFile.setFinalizer(originalFile.getFinalizer());
+-            
++
+             ModeFlags modes;
+             if (newFile.isReadable()) {
+                 if (newFile.isWritable()) {
+@@ -1610,14 +1606,14 @@
+                     modes = originalFile.getMainStream().getModes();
+                 }
+             }
+-            
++
+             ChannelDescriptor descriptor = originalFile.getMainStream().getDescriptor().dup();
+ 
+             newFile.setMainStream(ChannelStream.fdopen(runtime, descriptor, modes));
+-            
++
+             // TODO: the rest of this...seeking to same position is unnecessary since we share a channel
+             // but some of this may be needed?
+-            
++
+ //    fseeko(fptr->f, ftello(orig->f), SEEK_SET);
+ //    if (orig->f2) {
+ //	if (fileno(orig->f) != fileno(orig->f2)) {
+@@ -1629,7 +1625,7 @@
+ //    if (fptr->mode & FMODE_BINMODE) {
+ //	rb_io_binmode(dest);
+ //    }
+-            
++
+             // Register the new descriptor
+             registerDescriptor(newFile.getMainStream().getDescriptor());
+         } catch (IOException ex) {
+@@ -1641,12 +1637,12 @@
+         } catch (InvalidValueException ex) {
+             throw runtime.newIOError("could not init copy: " + ex);
+         }
+-        
++
+         return this;
+     }
+-    
++
+     /** Closes the IO.
+-     * 
++     *
+      * @return The IO.
+      */
+     @JRubyMethod(name = "closed?")
+@@ -1654,30 +1650,30 @@
+         return context.getRuntime().newBoolean(openFile.getMainStream() == null && openFile.getPipeStream() == null);
+     }
+ 
+-    /** 
++    /**
+      * <p>Closes all open resources for the IO.  It also removes
+      * it from our magical all open file descriptor pool.</p>
+-     * 
++     *
+      * @return The IO.
+      */
+     @JRubyMethod(name = "close")
+     public IRubyObject close() {
+         Ruby runtime = getRuntime();
+-        
++
+         if (runtime.getSafeLevel() >= 4 && isTaint()) {
+             throw runtime.newSecurityError("Insecure: can't close");
+         }
+-        
++
+         openFile.checkClosed(runtime);
+         return close2(runtime);
+     }
+-        
++
+     protected IRubyObject close2(Ruby runtime) {
+         if (openFile == null) return runtime.getNil();
+-        
++
+         // These would be used when we notify threads...if we notify threads
+         interruptBlockingThreads();
+-        
++
+         ChannelDescriptor main, pipe;
+         if (openFile.getPipeStream() != null) {
+             pipe = openFile.getPipeStream().getDescriptor();
+@@ -1687,14 +1683,14 @@
+             }
+             pipe = null;
+         }
+-        
++
+         main = openFile.getMainStream().getDescriptor();
+-        
++
+         // cleanup, raising errors if any
+         openFile.cleanup(runtime, true);
+-        
++
+         // TODO: notify threads waiting on descriptors/IO? probably not...
+-        
++
+         if (openFile.getProcess() != null) {
+             try {
+                 IRubyObject processResult = RubyProcess.RubyStatus.newProcessStatus(runtime, openFile.getProcess().waitFor());
+@@ -1703,7 +1699,7 @@
+                 // TODO: do something here?
+             }
+         }
+-        
++
+         return runtime.getNil();
+     }
+ 
+@@ -1713,13 +1709,13 @@
+             if (context.getRuntime().getSafeLevel() >= 4 && isTaint()) {
+                 throw context.getRuntime().newSecurityError("Insecure: can't close");
+             }
+-            
++
+             OpenFile myOpenFile = getOpenFileChecked();
+-            
++
+             if (myOpenFile.getPipeStream() == null && myOpenFile.isReadable()) {
+                 throw context.getRuntime().newIOError("closing non-duplex IO for writing");
+             }
+-            
++
+             if (myOpenFile.getPipeStream() == null) {
+                 close();
+             } else{
+@@ -1739,18 +1735,18 @@
+     @JRubyMethod(name = "close_read")
+     public IRubyObject close_read(ThreadContext context) throws BadDescriptorException {
+         Ruby runtime = context.getRuntime();
+-        
++
+         try {
+             if (runtime.getSafeLevel() >= 4 && isTaint()) {
+                 throw runtime.newSecurityError("Insecure: can't close");
+             }
+-            
++
+             OpenFile myOpenFile = getOpenFileChecked();
+-            
++
+             if (myOpenFile.getPipeStream() == null && myOpenFile.isWritable()) {
+                 throw runtime.newIOError("closing non-duplex IO for reading");
+             }
+-            
++
+             if (myOpenFile.getPipeStream() == null) {
+                 close();
+             } else{
+@@ -1770,12 +1766,12 @@
+     }
+ 
+     /** Flushes the IO output stream.
+-     * 
++     *
+      * @return The IO.
+      */
+     @JRubyMethod(name = "flush")
+     public RubyIO flush() {
+-        try { 
++        try {
+             getOpenFileChecked().getWriteStream().fflush();
+         } catch (BadDescriptorException e) {
+             throw getRuntime().newErrnoEBADFError();
+@@ -1787,13 +1783,13 @@
+     }
+ 
+     /** Read a line.
+-     * 
++     *
+      */
+     @JRubyMethod(name = "gets", optional = 1, writes = FrameField.LASTLINE)
+     public IRubyObject gets(ThreadContext context, IRubyObject[] args) {
+         Ruby runtime = context.getRuntime();
+         ByteList separator = getSeparatorForGets(runtime, args);
+-        
++
+         IRubyObject result = getline(runtime, separator);
+ 
+         if (!result.isNil()) context.getCurrentFrame().setLastLine(result);
+@@ -1816,21 +1812,21 @@
+     public IRubyObject ioctl(ThreadContext context, IRubyObject[] args) {
+         IRubyObject cmd = args[0];
+         IRubyObject arg;
+-        
++
+         if (args.length == 2) {
+             arg = args[1];
+         } else {
+             arg = context.getRuntime().getNil();
+         }
+-        
++
+         return ctl(context.getRuntime(), cmd, arg);
+     }
+ 
+     public IRubyObject ctl(Ruby runtime, IRubyObject cmd, IRubyObject arg) {
+         long realCmd = cmd.convertToInteger().getLongValue();
+         long nArg = 0;
+-        
+-        // FIXME: Arg may also be true, false, and nil and still be valid.  Strangely enough, 
++
++        // FIXME: Arg may also be true, false, and nil and still be valid.  Strangely enough,
+         // protocol conversion is not happening in Ruby on this arg?
+         if (arg.isNil() || arg == runtime.getFalse()) {
+             nArg = 0;
+@@ -1841,13 +1837,13 @@
+         } else {
+             throw runtime.newNotImplementedError("JRuby does not support string for second fcntl/ioctl argument yet");
+         }
+-        
++
+         OpenFile myOpenFile = getOpenFileChecked();
+ 
+         // Fixme: Only F_SETFL is current supported
+         if (realCmd == 1L) {  // cmd is F_SETFL
+             boolean block = true;
+-            
++
+             if ((nArg & ModeFlags.NONBLOCK) == ModeFlags.NONBLOCK) {
+                 block = false;
+             }
+@@ -1860,10 +1856,10 @@
+         } else {
+             throw runtime.newNotImplementedError("JRuby only supports F_SETFL for fcntl/ioctl currently");
+         }
+-        
++
+         return runtime.newFixnum(0);
+     }
+-    
++
+     private static final ByteList NIL_BYTELIST = ByteList.create("nil");
+     private static final ByteList RECURSIVE_BYTELIST = ByteList.create("[...]");
+ 
+@@ -1872,7 +1868,7 @@
+         Ruby runtime = context.getRuntime();
+         assert runtime.getGlobalVariables().getDefaultSeparator() instanceof RubyString;
+         RubyString separator = (RubyString) runtime.getGlobalVariables().getDefaultSeparator();
+-        
++
+         if (args.length == 0) {
+             write(context, separator.getByteList());
+             return runtime.getNil();
+@@ -1880,7 +1876,7 @@
+ 
+         for (int i = 0; i < args.length; i++) {
+             ByteList line;
+-            
++
+             if (args[i].isNil()) {
+                 line = NIL_BYTELIST;
+             } else if (runtime.isInspecting(args[i])) {
+@@ -1891,9 +1887,9 @@
+             } else {
+                 line = args[i].asString().getByteList();
+             }
+-            
++
+             write(context, line);
+-            
++
+             if (line.length() == 0 || !line.endsWith(separator.getByteList())) {
+                 write(context, separator.getByteList());
+             }
+@@ -1915,19 +1911,19 @@
+     }
+ 
+     /** Read a line.
+-     * 
++     *
+      */
+     @JRubyMethod(name = "readline", optional = 1, writes = FrameField.LASTLINE)
+     public IRubyObject readline(ThreadContext context, IRubyObject[] args) {
+         IRubyObject line = gets(context, args);
+ 
+         if (line.isNil()) throw context.getRuntime().newEOFError();
+-        
++
+         return line;
+     }
+ 
+     /** Read a byte. On EOF returns nil.
+-     * 
++     *
+      */
+     @JRubyMethod(name = "getc")
+     public IRubyObject getc() {
+@@ -1938,12 +1934,12 @@
+             myOpenFile.setReadBuffered();
+ 
+             Stream stream = myOpenFile.getMainStream();
+-            
++
+             readCheck(stream);
+             stream.clearerr();
+-        
++
+             int c = myOpenFile.getMainStream().fgetc();
+-            
++
+             if (c == -1) {
+                 // TODO: check for ferror, clear it, and try once more up above readCheck
+ //                if (ferror(f)) {
+@@ -1954,7 +1950,7 @@
+ //                }
+                 return getRuntime().getNil();
+             }
+-        
++
+             return getRuntime().newFixnum(c);
+         } catch (PipeException ex) {
+             throw getRuntime().newErrnoEPIPEError();
+@@ -1968,28 +1964,28 @@
+             throw getRuntime().newIOError(e.getMessage());
+         }
+     }
+-    
++
+     private void readCheck(Stream stream) {
+         if (!stream.readDataBuffered()) {
+             openFile.checkClosed(getRuntime());
+         }
+     }
+-    
+-    /** 
++
++    /**
+      * <p>Pushes char represented by int back onto IOS.</p>
+-     * 
++     *
+      * @param number to push back
+      */
+     @JRubyMethod(name = "ungetc", required = 1)
+     public IRubyObject ungetc(IRubyObject number) {
+         int ch = RubyNumeric.fix2int(number);
+-        
++
+         OpenFile myOpenFile = getOpenFileChecked();
+-        
++
+         if (!myOpenFile.isReadBuffered()) {
+             throw getRuntime().newIOError("unread stream");
+         }
+-        
++
+         try {
+             myOpenFile.checkReadable(getRuntime());
+             myOpenFile.setReadBuffered();
+@@ -2011,7 +2007,7 @@
+ 
+         return getRuntime().getNil();
+     }
+-    
++
+     @JRubyMethod(name = "read_nonblock", required = 1, optional = 1)
+     public IRubyObject read_nonblock(ThreadContext context, IRubyObject[] args) {
+         Ruby runtime = context.getRuntime();
+@@ -2043,7 +2039,7 @@
+             throw runtime.newIOError(e.getMessage());
+         }
+     }
+-    
++
+     @JRubyMethod(name = "readpartial", required = 1, optional = 1)
+     public IRubyObject readpartial(ThreadContext context, IRubyObject[] args) {
+         Ruby runtime = context.getRuntime();
+@@ -2088,48 +2084,48 @@
+                 if (len == 0) {
+                     return RubyString.newEmptyString(getRuntime());
+                 }
+-                
++
+                 buffer = new ByteList(len);
+                 str = RubyString.newString(getRuntime(), buffer);
+             } else {
+                 str = args[1].convertToString();
+                 str.modify(len);
+-                
++
+                 if (len == 0) {
+                     return str;
+                 }
+-                
++
+                 buffer = str.getByteList();
+                 buffer.length(0);
+             }
+-            
++
+             OpenFile myOpenFile = getOpenFileChecked();
+-            
++
+             myOpenFile.checkReadable(getRuntime());
+-            
++
+             if (myOpenFile.getMainStream().readDataBuffered()) {
+                 throw getRuntime().newIOError("sysread for buffered IO");
+             }
+-            
++
+             // TODO: Ruby locks the string here
+-            
++
+             context.getThread().beforeBlockingCall();
+             myOpenFile.checkClosed(getRuntime());
+-            
++
+             // TODO: Ruby re-checks that the buffer string hasn't been modified
+-            
++
+             int bytesRead = myOpenFile.getMainStream().getDescriptor().read(len, str.getByteList());
+-            
++
+             // TODO: Ruby unlocks the string here
+-            
++
+             // TODO: Ruby truncates string to specific size here, but our bytelist should handle this already?
+-            
++
+             if (bytesRead == -1 || (bytesRead == 0 && len > 0)) {
+                 throw getRuntime().newEOFError();
+             }
+-            
++
+             str.setTaint(true);
+-            
++
+             return str;
+         } catch (BadDescriptorException e) {
+             throw getRuntime().newErrnoEBADFError();
+@@ -2151,10 +2147,10 @@
+             context.getThread().afterBlockingCall();
+         }
+     }
+-    
++
+     public IRubyObject read(IRubyObject[] args) {
+         ThreadContext context = getRuntime().getCurrentContext();
+-        
++
+         switch (args.length) {
+         case 0: return read(context);
+         case 1: return read(context, args[0]);
+@@ -2162,12 +2158,12 @@
+         default: throw getRuntime().newArgumentError(args.length, 2);
+         }
+     }
+-    
++
+     @JRubyMethod(name = "read")
+     public IRubyObject read(ThreadContext context) {
+         Ruby runtime = context.getRuntime();
+         OpenFile myOpenFile = getOpenFileChecked();
+-        
++
+         try {
+             myOpenFile.checkReadable(runtime);
+             myOpenFile.setReadBuffered();
+@@ -2185,30 +2181,30 @@
+             throw getRuntime().newErrnoEBADFError();
+         }
+     }
+-    
++
+     @JRubyMethod(name = "read")
+     public IRubyObject read(ThreadContext context, IRubyObject arg0) {
+         if (arg0.isNil()) {
+             return read(context);
+         }
+-        
++
+         OpenFile myOpenFile = getOpenFileChecked();
+-        
++
+         int length = RubyNumeric.num2int(arg0);
+-        
++
+         if (length < 0) {
+             throw getRuntime().newArgumentError("negative length " + length + " given");
+         }
+-        
++
+         RubyString str = null;
+ 
+         return readNotAll(context, myOpenFile, length, str);
+     }
+-    
++
+     @JRubyMethod(name = "read")
+     public IRubyObject read(ThreadContext context, IRubyObject arg0, IRubyObject arg1) {
+         OpenFile myOpenFile = getOpenFileChecked();
+-        
++
+         if (arg0.isNil()) {
+             try {
+                 myOpenFile.checkReadable(getRuntime());
+@@ -2227,13 +2223,13 @@
+                 throw getRuntime().newErrnoEBADFError();
+             }
+         }
+-        
++
+         int length = RubyNumeric.num2int(arg0);
+-        
++
+         if (length < 0) {
+             throw getRuntime().newArgumentError("negative length " + length + " given");
+         }
+-        
++
+         RubyString str = null;
+ //        ByteList buffer = null;
+         if (arg1.isNil()) {
+@@ -2249,13 +2245,13 @@
+ 
+ //            buffer = str.getByteList();
+         }
+-        
++
+         return readNotAll(context, myOpenFile, length, str);
+     }
+-    
++
+     private IRubyObject readNotAll(ThreadContext context, OpenFile myOpenFile, int length, RubyString str) {
+         Ruby runtime = context.getRuntime();
+-        
++
+         try {
+             myOpenFile.checkReadable(runtime);
+             myOpenFile.setReadBuffered();
+@@ -2282,7 +2278,7 @@
+ 
+             // TODO: change this to check number read into buffer once that's working
+     //        if (read == 0) {
+-            
++
+             if (newBuffer == null || newBuffer.length() == 0) {
+                 if (myOpenFile.getMainStream() == null) {
+                     return runtime.getNil();
+@@ -2293,7 +2289,7 @@
+                     if (str != null) {
+                         str.setValue(ByteList.EMPTY_BYTELIST.dup());
+                     }
+-                
++
+                     return runtime.getNil();
+                 }
+ 
+@@ -2339,23 +2335,23 @@
+             throw runtime.newErrnoEBADFError();
+         }
+     }
+-    
++
+     protected IRubyObject readAll(IRubyObject buffer) throws BadDescriptorException, EOFException, IOException {
+         Ruby runtime = getRuntime();
+         // TODO: handle writing into original buffer better
+-        
++
+         RubyString str = null;
+         if (buffer instanceof RubyString) {
+             str = (RubyString)buffer;
+         }
+-        
++
+         // TODO: ruby locks the string here
+-        
++
+         // READ_CHECK from MRI io.c
+         if (openFile.getMainStream().readDataBuffered()) {
+             openFile.checkClosed(runtime);
+         }
+-        
++
+         ByteList newBuffer = openFile.getMainStream().readall();
+ 
+         // TODO same zero-length checks as file above
+@@ -2408,7 +2404,7 @@
+ //
+ //        return str;
+     }
+-    
++
+     // TODO: There's a lot of complexity here due to error handling and
+     // nonblocking IO; much of this goes away, but for now I'm just
+     // having read call ChannelStream.fread directly.
+@@ -2459,45 +2455,45 @@
+ //            n--;
+ //        }
+ //        return len - n;
+-//        
++//
+ //    }
+ 
+     /** Read a byte. On EOF throw EOFError.
+-     * 
++     *
+      */
+     @JRubyMethod(name = "readchar")
+     public IRubyObject readchar() {
+         IRubyObject c = getc();
+-        
++
+         if (c.isNil()) throw getRuntime().newEOFError();
+-        
++
+         return c;
+     }
+-    
++
+     @JRubyMethod
+     public IRubyObject stat(ThreadContext context) {
+         openFile.checkClosed(context.getRuntime());
+         return context.getRuntime().newFileStat(getOpenFileChecked().getMainStream().getDescriptor().getFileDescriptor());
+     }
+ 
+-    /** 
++    /**
+      * <p>Invoke a block for each byte.</p>
+      */
+     @JRubyMethod(name = "each_byte", frame = true)
+     public IRubyObject each_byte(ThreadContext context, Block block) {
+         Ruby runtime = context.getRuntime();
+-        
++
+     	try {
+             OpenFile myOpenFile = getOpenFileChecked();
+-            
++
+             while (true) {
+                 myOpenFile.checkReadable(runtime);
+                 myOpenFile.setReadBuffered();
+ 
+                 // TODO: READ_CHECK from MRI
+-                
++
+                 int c = myOpenFile.getMainStream().fgetc();
+-                
++
+                 if (c == -1) {
+                     // TODO: check for error, clear it, and wait until readable before trying once more
+ //                    if (ferror(f)) {
+@@ -2508,7 +2504,7 @@
+ //                    }
+                     break;
+                 }
+-                
++
+                 assert c < 256;
+                 block.yield(context, getRuntime().newFixnum(c));
+             }
+@@ -2534,19 +2530,19 @@
+         return block.isGiven() ? each_byte(context, block) : enumeratorize(context.getRuntime(), this, "each_byte");
+     }
+ 
+-    /** 
++    /**
+      * <p>Invoke a block for each line.</p>
+      */
+     @JRubyMethod(name = {"each_line", "each"}, optional = 1, frame = true)
+     public RubyIO each_line(ThreadContext context, IRubyObject[] args, Block block) {
+         Ruby runtime = context.getRuntime();
+         ByteList separator = getSeparatorForGets(runtime, args);
+-        
+-        for (IRubyObject line = getline(runtime, separator); !line.isNil(); 
++
++        for (IRubyObject line = getline(runtime, separator); !line.isNil();
+         	line = getline(runtime, separator)) {
+             block.yield(context, line);
+         }
+-        
++
+         return this;
+     }
+ 
+@@ -2567,13 +2563,13 @@
+         ByteList separator = getSeparatorForGets(runtime, separatorArgs);
+         RubyArray result = runtime.newArray();
+         IRubyObject line;
+-        
++
+         while (! (line = getline(runtime, separator)).isNil()) {
+             result.append(line);
+         }
+         return result;
+     }
+-    
++
+     @JRubyMethod(name = "to_io")
+     public RubyIO to_io() {
+     	return this;
+@@ -2583,9 +2579,9 @@
+     public String toString() {
+         return "RubyIO(" + openFile.getMode() + ", " + openFile.getMainStream().getDescriptor().getFileno() + ")";
+     }
+-    
++
+     /* class methods for IO */
+-    
++
+     /** rb_io_s_foreach
+     *
+     */
+@@ -2595,11 +2591,11 @@
+         int count = args.length;
+         IRubyObject filename = args[0].convertToString();
+         runtime.checkSafeString(filename);
+-       
++
+         ByteList separator = getSeparatorFromArgs(runtime, args, 1);
+ 
+         RubyIO io = (RubyIO)RubyFile.open(context, runtime.getFile(), new IRubyObject[] { filename }, Block.NULL_BLOCK);
+-        
++
+         if (!io.isNil()) {
+             try {
+                 IRubyObject str = io.getline(runtime, separator);
+@@ -2611,10 +2607,10 @@
+                 io.close();
+             }
+         }
+-       
++
+         return runtime.getNil();
+     }
+-    
++
+     @JRubyMethod(name = "foreach", required = 1, optional = 1, frame = true, meta = true, compat = CompatVersion.RUBY1_9)
+     public static IRubyObject foreach19(final ThreadContext context, IRubyObject recv, IRubyObject[] args, final Block block) {
+         return block.isGiven() ? foreach(context, recv, args, block) : enumeratorize(context.getRuntime(), recv, "foreach", args);
+@@ -2623,26 +2619,26 @@
+     private static RubyIO convertToIO(ThreadContext context, IRubyObject obj) {
+         return (RubyIO)TypeConverter.convertToType(obj, context.getRuntime().getIO(), "to_io");
+     }
+-   
++
+     private static boolean registerSelect(ThreadContext context, Selector selector, IRubyObject obj, RubyIO ioObj, int ops) throws IOException {
+        Channel channel = ioObj.getChannel();
+        if (channel == null || !(channel instanceof SelectableChannel)) {
+            return false;
+        }
+-       
++
+        ((SelectableChannel) channel).configureBlocking(false);
+        int real_ops = ((SelectableChannel) channel).validOps() & ops;
+        SelectionKey key = ((SelectableChannel) channel).keyFor(selector);
+-       
++
+        if (key == null) {
+            ((SelectableChannel) channel).register(selector, real_ops, obj);
+        } else {
+            key.interestOps(key.interestOps()|real_ops);
+        }
+-       
++
+        return true;
+     }
+-   
++
+     @JRubyMethod(name = "select", required = 1, optional = 3, meta = true)
+     public static IRubyObject select(ThreadContext context, IRubyObject recv, IRubyObject[] args) {
+         return select_static(context, context.getRuntime(), args);
+@@ -2715,21 +2711,21 @@
+                    throw runtime.newArgumentError("negative timeout given");
+                }
+            }
+-           
++
+            if (pending.isEmpty() && unselectable_reads.isEmpty() && unselectable_writes.isEmpty()) {
+                if (has_timeout) {
+                    if (timeout==0) {
+                        selector.selectNow();
+                    } else {
+-                       selector.select(timeout);                       
++                       selector.select(timeout);
+                    }
+                } else {
+                    selector.select();
+                }
+            } else {
+-               selector.selectNow();               
++               selector.selectNow();
+            }
+-           
++
+            List r = new ArrayList();
+            List w = new ArrayList();
+            List e = new ArrayList();
+@@ -2754,7 +2750,7 @@
+            r.addAll(pending);
+            r.addAll(unselectable_reads);
+            w.addAll(unselectable_writes);
+-           
++
+            // make all sockets blocking as configured again
+            for (Iterator i = selector.keys().iterator(); i.hasNext(); ) {
+                SelectionKey key = (SelectionKey) i.next();
+Index: src/org/jruby/RubySignal.java
+===================================================================
+--- src/org/jruby/RubySignal.java	(revision 8091)
++++ src/org/jruby/RubySignal.java	(working copy)
+@@ -31,7 +31,6 @@
+ import org.jruby.anno.JRubyModule;
+ import org.jruby.javasupport.util.RuntimeHelpers;
+ import org.jruby.runtime.Block;
+-import org.jruby.runtime.CallType;
+ import org.jruby.runtime.ThreadContext;
+ import org.jruby.runtime.builtin.IRubyObject;
+ 
+@@ -66,14 +65,14 @@
+ 
+     @JRubyMethod(name = "trap", required = 1, optional = 1, frame = true, meta = true)
+     public static IRubyObject trap(ThreadContext context, IRubyObject recv, IRubyObject[] args, Block block) {
+-        Ruby runtime = recv.getRuntime();
++        Ruby runtime = context.getRuntime();
+         runtime.getLoadService().require("jsignal");
+         return RuntimeHelpers.invoke(context, runtime.getKernel(), "__jtrap", args, block);
+     }
+     
+     @JRubyMethod(name = "list", meta = true)
+     public static IRubyObject list(ThreadContext context, IRubyObject recv) {
+-        Ruby runtime = recv.getRuntime();
++        Ruby runtime = context.getRuntime();
+         RubyHash names = RubyHash.newHash(runtime);
+         for (int i = 0; i < NAMES.length; i++) {
+             names.op_aset(context, runtime.newString(NAMES[i]), runtime.newFixnum(i));
+Index: tool/nailgun/src/java/org/jruby/util/NailMain.java
+===================================================================
+--- tool/nailgun/src/java/org/jruby/util/NailMain.java	(revision 8091)
++++ tool/nailgun/src/java/org/jruby/util/NailMain.java	(working copy)
+@@ -5,6 +5,7 @@
+ import org.jruby.RubyInstanceConfig;
+ 
+ public class NailMain {
++
+     public static void nailMain(NGContext context) {
+         NailMain main = new NailMain();
+         int status = main.run(context);
+@@ -15,13 +16,13 @@
+ 
+     public int run(NGContext context) {
+         context.assertLoopbackClient();
+-
+         RubyInstanceConfig config = new RubyInstanceConfig();
+-        // populate commandline with NG-provided stuff
++        config.setInput(context.in);
++        config.setOutput(context.out);
++        config.setError(context.err);
+         config.processArguments(context.getArgs());
+         config.setCurrentDirectory(context.getWorkingDirectory());
+         config.setEnvironment(context.getEnv());
+-
+         Main main = new Main(config);
+         return main.run();
+     }
