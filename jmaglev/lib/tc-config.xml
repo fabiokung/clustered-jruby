@@ -1,0 +1,87 @@
+<tc:tc-config xmlns:tc="http://www.terracotta.org/config"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.terracotta.org/schema/terracotta-4.xsd">  
+
+  <servers>
+     <server host="%h">
+       <data>%(user.home)/.terracotta/server-data/jmaglev/%D</data>
+       <logs>%(user.home)/.terracotta/server-logs/jmaglev/%D</logs>
+    </server>
+  </servers>
+  
+  <clients>
+    <modules>
+      <module name='clustered-jruby' version='1.0.0-SNAPSHOT' group-id='com.fabiokung'/>
+    </modules>
+    <logs>%(user.home)/.terracotta/client-logs/jmaglev/%D</logs>
+    <statistics>%(user.home)/.terracotta/client-statistics/jmaglev/%D</statistics>
+  </clients>
+
+  <application>
+    <dso>
+      <transient-fields>
+        <field-name>org.jruby.RubyClass.runtime</field-name>
+        <field-name>org.jruby.RubyClass.allocator</field-name>
+        <field-name>org.jruby.RubyClass.marshal</field-name>
+        <field-name>org.jruby.RubyClass.subclasses</field-name>
+        <field-name>org.jruby.RubyModule.kindOf</field-name>
+        <field-name>org.jruby.RubyModule.includingHierarchies</field-name>
+        <field-name>org.jruby.RubyObject.dataStruct</field-name>
+        <field-name>org.jruby.RubyThread.threadImpl</field-name>
+        <field-name>org.jruby.RubyThread.threadService</field-name>
+        <field-name>org.jruby.runtime.CacheMap.mappings</field-name>
+        <field-name>org.jruby.MetaClass.attached</field-name>
+        <field-name>org.jruby.common.RubyWarnings.runtime</field-name>
+        <field-name>org.jruby.internal.runtime.GlobalVariable.runtime</field-name>
+        <field-name>org.jruby.internal.runtime.methods.DynamicMethod.callConfig</field-name>
+        <field-name>org.jruby.internal.runtime.methods.DefaultMethod.jitCompiledScript</field-name>
+        <field-name>org.jruby.internal.runtime.GlobalVariables.runtime</field-name>
+        <field-name>org.jruby.internal.runtime.RubyRunnable.runtime</field-name>
+        <field-name>org.jruby.internal.runtime.UndefinedAccessor.runtime</field-name>
+        <field-name>org.jruby.ext.JRubyPOSIXHandler.runtime</field-name>
+        <field-name>org.jruby.evaluator.ValueConverter.runtime</field-name>
+        <field-name>org.jruby.compiler.JITCompiler.ruby</field-name>
+        <field-name>org.jruby.compiler.yarv.StandardYARVCompiler.runtime</field-name>
+        <field-name>org.jruby.ast.executable.YARVCompiledRunner.runtime</field-name>
+        <field-name>org.jruby.javasupport.JavaSupport.runtime</field-name>
+        <field-name>org.jruby.javasupport.proxy.JavaProxyClass.runtimeTLS</field-name>
+        <field-name>org.jruby.management.BeanManager.ruby</field-name>
+        <field-name>org.jruby.management.ClassCache.ruby</field-name>
+        <field-name>org.jruby.management.Config.ruby</field-name>
+        <field-name>org.jruby.management.ParserStats.ruby</field-name>
+        <field-name>org.jruby.parser.Parser.runtime</field-name>
+        <field-name>org.jruby.runtime.GlobalVariable.runtime</field-name>
+        <field-name>org.jruby.runtime.ThreadContext.runtime</field-name>
+        <field-name>org.jruby.runtime.callback.InvocationCallbackFactory.runtime</field-name>
+        <field-name>org.jruby.runtime.load.LoadService.runtime</field-name>
+        <field-name>org.jruby.runtime.marshal.UnmarshalCache.runtime</field-name>
+        <field-name>org.jruby.util.ZlibDeflate.runtime</field-name>
+        <field-name>org.jruby.util.ZlibInflate.runtime</field-name>
+        <field-name>org.jruby.util.io.OpenFile.mainStream</field-name>
+        <field-name>org.jruby.util.io.OpenFile.pipeStream</field-name>
+        <field-name>org.jruby.util.io.ChannelStream.runtime</field-name>
+        <field-name>org.jruby.util.io.ChannelStream.descriptor</field-name>
+        <field-name>org.jruby.util.io.JRubyObjectInputStream.impl</field-name>
+        <field-name>org.jruby.yaml.JRubyConstructor.runtime</field-name>
+        <field-name>org.jruby.javasupport.JavaClass.proxyLock</field-name>
+        <field-name>org.jruby.TopSelfFactory$1.val$runtime</field-name>
+        <field-name>org.jruby.TopSelfFactory$2.val$runtime</field-name>
+        <field-name>org.jruby.TopSelfFactory$3.val$runtime</field-name>
+        <field-name>org.jruby.TopSelfFactory$4.val$runtime</field-name>
+        <field-name>org.jruby.RubyModule$4.val$runtime</field-name>
+        <field-name>org.jruby.RubyModule$5.val$runtime</field-name>
+        <field-name>org.jruby.javasupport.Java$5.val$runtime</field-name>
+        <field-name>org.jruby.javasupport.Java$6.val$runtime</field-name>
+        <field-name>org.jruby.util.SunSignalFacade$1.val$oldHandler</field-name>
+        <field-name>org.jruby.util.SunSignalFacade$JRubySignalHandler.runtime</field-name>
+      </transient-fields>
+
+      <roots>
+        <root>
+          <field-name>org.jruby.internal.runtime.GlobalVariables.globalVariables</field-name>
+        </root>
+      </roots>
+    </dso>
+  </application>
+
+</tc:tc-config>

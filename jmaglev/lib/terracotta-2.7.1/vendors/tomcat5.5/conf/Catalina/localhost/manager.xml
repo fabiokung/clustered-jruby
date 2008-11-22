@@ -1,0 +1,17 @@
+<!--
+
+    Context configuration file for the Tomcat Manager Web App
+
+    $Id: manager.xml 2 2006-11-10 22:41:25Z nharward $
+
+-->
+
+
+<Context docBase="${catalina.home}/server/webapps/manager"
+         privileged="true" antiResourceLocking="false" antiJARLocking="false">
+
+  <!-- Link to the user database we will get roles from -->
+  <ResourceLink name="users" global="UserDatabase"
+                type="org.apache.catalina.UserDatabase"/>
+
+</Context>

@@ -1,0 +1,44 @@
+#!/bin/bash
+
+cygwin=false
+
+# ----- Identify OS we are running under --------------------------------------
+case "`uname`" in
+CYGWIN*) cygwin=true
+esac
+
+PRG=$0
+progname=`basename "$0"`
+
+while [ -h "$PRG" ] ; do
+  ls=`ls -ld "$PRG"`
+  link=`expr "$ls" : '.*-> \(.*\)$'`
+  if expr "$link" : '.*/.*' > /dev/null; then
+  PRG="$link"
+  else
+  PRG="`dirname $PRG`/$link"
+  fi
+done
+
+JMAGLEV_HOME_1=`dirname "$PRG"`           # the ./bin dir
+JMAGLEV_HOME=`dirname "$JRUBY_HOME_1"`  # the . dir
+
+if [ -z "$JRUBY_OPTS" ] ; then
+  JRUBY_OPTS=""
+fi
+
+if [ -z "$JAVA_HOME" ] ; then
+  JAVA_CMD='java'
+else
+  if $cygwin; then
+    JAVA_HOME=`cygpath -u "$JAVA_HOME"`
+  fi
+  JAVA_CMD="$JAVA_HOME/bin/java"
+fi
+
+$JAVA_CMD -Dcom.tc.l1.modules.repositories=$JMAGLEV_HOME/../target \
+    -Dtc.install-root=$JMAGLEV_HOME/lib/terracotta-2.7.1 \
+    -Dtc.config=$JMAGLEV_HOME/lib/tc-config.xml \
+    -Xbootclasspath/p:$JMAGLEV_HOME/lib/dso-boot.jar \
+    -cp .:$JMAGLEV_HOME/lib/jruby-complete-1.1.5.jar: \
+    org.jruby.Main "$@"

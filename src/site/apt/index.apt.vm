@@ -1,0 +1,37 @@
+Introduction
+
+	${project.description}
+
+	Read the {{{docs/about.html}About}} page for more information about this project.
+
+	Go to the {{{docs/quickstart.html}Quickstart Guide}} to get you up and running with
+	the project in the fewest-possible steps.
+
+	The {{{docs/installation.html}Install Guide}} has instructions on how to install this
+	project into your local Maven repository.
+
+	Read the {{{docs/building.html}Building}} page for instructions on how to configure
+	your environment to create your own builds of this project.
+
+	And finally, go to the {{{docs/downloads.html}Downloads}} section to download the
+	packaged binaries and source for this project.
+
+	Enjoy!
+	
+* Maven Coordinates
+
+	To reference this artifact, use the following attribute values: 
+
+---
+groupId   : ${project.groupId}
+artifactId: ${project.artifactId}
+version   : ${project.version}
+---
+
+	You can also cut and paste the following code snippet into your project's POM:
+
+---
+<groupId>${project.groupId}</groupId>
+<artifactId>${project.artifactId}</artifactId>
+<version>${project.version}</version>
+---	

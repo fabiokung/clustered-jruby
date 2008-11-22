@@ -1,0 +1,54 @@
+Building
+
+	This integration module ships ready to be installed and used.
+
+* Environment Configuration
+
+	If you decide to install from source you will have to build the project.
+
+	Curabitur nulla tellus, faucibus a, tincidunt at, mattis ac, massa. Curabitur vel lacus.
+	Praesent aliquam. Donec tincidunt semper mi. Mauris ultrices, turpis vel porta facilisis,
+	tortor enim venenatis augue, et gravida sapien risus non arcu. Vivamus rhoncus. Nam risus.
+	Phasellus ut quam sit amet felis molestie bibendum. Nam metus. Quisque facilisis faucibus
+	risus. Vestibulum enim mauris, accumsan a, porta et, pulvinar et, eros. Donec aliquet
+	justo nec nunc. Integer id lacus imperdiet nunc feugiat interdum. Suspendisse potenti.
+
+* Terracotta's Maven Repository
+
+	At the time of this writing, the {{{http://forge.terracotta.org}Terracotta Forge}} artifacts are
+	not yet available from Maven's central repository.
+
+	So if you are going to use this artifact, and you haven't installed it yet in your local Maven
+	repository, then you will need a way to tell your project where it can be found.
+
+	Terracotta's Maven repository URL is:
+
+---
+http://www.terracotta.org/download/reflector/maven2
+---
+
+	To tell Maven about this location, you can set the <<<remoteRepositories>>> property by including the
+	following in the command line when you invoke Maven:
+
+
+---
+-DremoteRepositories=http://www.terracotta.org/download/reflector/maven2
+---
+
+	If your project has other Terracotta Artifact's as dependencies, you will have to add the
+	following sections into your project's POM:
+
+---
+<repositories>
+   <repository>
+      <id>terracotta-repository</id>
+      <url>http://www.terracotta.org/download/reflector/maven2</url>
+   </repository>
+</repositories>
+<pluginRepositories>
+   <pluginRepository>
+      <id>terracotta-repository</id>
+      <url>http://www.terracotta.org/download/reflector/maven2</url>
+   </pluginRepository>
+</pluginRepositories>
+---

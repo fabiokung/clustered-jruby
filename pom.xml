@@ -1,0 +1,84 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  All content copyright (c) 2008 Fabio Kung,
+  except as may otherwise be noted in a separate copyright notice.
+  All rights reserved.
+-->
+<project xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' 
+         xsi:schemaLocation='http://maven.apache.org/POM/4.0.0 
+                             http://maven.apache.org/maven-v4_0_0.xsd' 
+         xmlns='http://maven.apache.org/POM/4.0.0'>
+  <properties>
+    <forgeTags>Integration Module</forgeTags>
+    <Bundle-RequiredExecutionEnvironment>J2SE-1.5</Bundle-RequiredExecutionEnvironment>
+  </properties>
+
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.terracotta.forge</groupId>
+    <artifactId>tim-parent</artifactId>
+    <version>1.2.1</version>
+  </parent>
+
+  <packaging>jar</packaging>
+  <groupId>com.fabiokung</groupId>
+  <artifactId>clustered-jruby</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <name>clustered-jruby</name>
+  <description>JRuby Cluster Configuration</description>
+
+  <scm>
+    <connection>scm:git:git://github.com/fabiokung/clustered-jruby.git</connection>
+    <developerConnection>scm:git:git@github.com:fabiokung/clustered-jruby.git</developerConnection>
+    <url>http://github.com/fabiokung/clustered-jruby/tree/master</url>
+  </scm>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <configuration>
+          <descriptorRefs>
+            <descriptorRef>src</descriptorRef>
+            <descriptorRef>bin</descriptorRef>
+          </descriptorRefs>
+          <outputDirectory>${project.build.directory}/site/downloads</outputDirectory>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>site</phase>
+            <goals>
+              <goal>assembly</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <repositories>
+    <repository>
+      <id>terracotta-repository</id>
+      <url>http://www.terracotta.org/download/reflector/maven2</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+  <pluginRepositories>
+    <pluginRepository>
+      <id>terracotta-repository</id>
+      <url>http://www.terracotta.org/download/reflector/maven2</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </pluginRepository>
+  </pluginRepositories>
+</project>

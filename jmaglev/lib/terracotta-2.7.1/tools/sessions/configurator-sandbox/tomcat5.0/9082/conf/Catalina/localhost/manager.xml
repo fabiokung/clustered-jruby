@@ -1,0 +1,25 @@
+<!--
+
+  All content copyright (c) 2003-2008 Terracotta, Inc.,
+  except as may otherwise be noted in a separate copyright notice.
+  All rights reserved.
+
+-->
+
+<!--
+
+    Context configuration file for the Tomcat Manager Web App
+
+    $Id: manager.xml 8484 2008-05-06 18:27:19Z jgalang $
+
+-->
+
+
+<Context path="/manager" docBase="${catalina.home}/server/webapps/manager"
+        debug="0" privileged="true">
+
+  <!-- Link to the user database we will get roles from -->
+  <ResourceLink name="users" global="UserDatabase"
+                type="org.apache.catalina.UserDatabase"/>
+
+</Context>

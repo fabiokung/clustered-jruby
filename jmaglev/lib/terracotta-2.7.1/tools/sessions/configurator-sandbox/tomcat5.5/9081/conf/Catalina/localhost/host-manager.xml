@@ -1,0 +1,21 @@
+<!--
+
+  All content copyright (c) 2003-2008 Terracotta, Inc.,
+  except as may otherwise be noted in a separate copyright notice.
+  All rights reserved.
+
+-->
+
+<!--
+
+    Context configuration file for the Tomcat Host Manager Web App
+
+    $Id: host-manager.xml 8484 2008-05-06 18:27:19Z jgalang $
+
+-->
+
+
+<Context docBase="${catalina.home}/server/webapps/host-manager"
+         privileged="true" antiResourceLocking="false" antiJARLocking="false">
+
+</Context>

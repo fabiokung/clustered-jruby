@@ -1,0 +1,118 @@
+Install Guide
+
+	There are several ways you can take to install this project's artifact into your
+	local Maven repository. Anyone of them will do.
+
+	After installation, head over to the {{{quickstart.html}Quickstart Guide}} for
+	instructions on how to use it.
+
+* Install Using the Packaged Binaries
+
+	Download a binary package:
+
+---
+$ curl -o ${project.artifactId}-${project.version}-bin.zip \
+  http://forge.terracotta.org/projects/${project.artifactId}/downloads/${project.artifactId}-${project.version}-bin.zip
+---
+
+	Unpack:
+
+---
+$ unzip ${project.artifactId}-${project.version}-bin.zip
+---
+
+	Install (you will need to do this for all JAR files included in the package):
+
+---
+$ cd ${project.artifactId}-${project.version}
+$ mvn install:install-file \
+  -DgroupId=${project.groupId} \
+  -DartifactId=${project.artifactId} \
+  -Dversion=${project.version} \
+  -Dpackaging=jar \
+  -Dfile=${project.artifactId}-${project.version}.jar
+---
+
+* Install Using the Packaged Source
+
+	Download a source package:
+
+---
+$ curl -o ${project.artifactId}-${project.version}-src.zip \
+  http://forge.terracotta.org/projects/${project.artifactId}/downloads/${project.artifactId}-${project.version}-src.zip
+---
+
+	Unpack:
+
+---
+$ unzip ${project.artifactId}-${project.version}-src.zip
+---
+
+	Install:
+
+---
+$ cd ${project.artifactId}-${project.version}
+$ mvn clean install
+---
+
+* Install Using the Source from Subversion
+
+	Checkout the project:
+
+---
+$ svn checkout \
+  ${project.scm.url} \
+  ${project.artifactId}-${project.version}
+---
+
+	Install:
+
+---
+$ cd ${project.artifactId}-${project.version}
+$ mvn clean install
+---
+
+* Install in Local Terracotta Installation
+
+	You don't need to install the ${project.name} artifacts in your local Maven repository to use it. You can also
+	choose to install these into your local Terracotta DSO installation's modules folder.
+
+	Assuming you've already downloaded and installed Terracotta, and the you've set the <<<TC_INSTALL_DIR>>>
+	environment variable to point to your Terracotta installation:
+
+---
+$ curl -o ${project.artifactId}-${project.version}-bin.zip \
+  http://forge.terracotta.org/projects/${project.artifactId}/downloads/${project.artifactId}-${project.version}-bin.zip
+$ unzip ${project.artifactId}-${project.version}-bin.zip
+$ cd ${project.artifactId}-${project.version}
+$ cp *.jar ${TC_INSTALL_DIR}/modules
+---
+
+
+* Install in Arbitrary Location
+
+	If you don't want to pollute your local Terracotta installation, you can also install an Integration Module at an
+	arbitrary location:
+
+---
+$ curl -o ${project.artifactId}-${project.version}-bin.zip \
+  http://forge.terracotta.org/projects/${project.artifactId}/downloads/${project.artifactId}-${project.version}-bin.zip
+$ unzip ${project.artifactId}-${project.version}-bin.zip
+$ mkdir ~/terracotta-modules
+$ cd ${project.artifactId}-${project.version}
+$ cp *.jar ~/terracotta-modules
+---
+
+	You will have to add a <<<\<repository/\>>>> section in your <<<tc-config.xml>>> file to tell Terracotta where
+	it can find these modules:
+
+---
+<clients>
+   <modules>
+      <repository>%(user.home)/modules</repository>
+      <module name="${project.artifactId}"
+         version="${project.version}"
+         group-id="${project.groupId}"/>
+   </modules>
+</clients>
+---

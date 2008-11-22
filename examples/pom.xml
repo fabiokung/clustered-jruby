@@ -1,0 +1,73 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  All content copyright (c) 2008 Fabio Kung,
+  except as may otherwise be noted in a separate copyright notice.
+  All rights reserved.
+-->
+<project xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' 
+         xsi:schemaLocation='http://maven.apache.org/POM/4.0.0 
+            http://maven.apache.org/maven-v4_0_0.xsd' 
+         xmlns='http://maven.apache.org/POM/4.0.0'>
+  <properties>
+     <tc-maven-plugin.version>1.2.1</tc-maven-plugin.version>
+  </properties>  
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.terracotta.forge</groupId>
+    <artifactId>application-parent</artifactId>
+    <version>1.0.5</version>
+  </parent>
+
+  <packaging>jar</packaging>
+  <groupId>org.terracotta.modules</groupId>
+  <artifactId>sample</artifactId>
+  <version>1.0.0</version>
+  <name>clustered-jruby sample application</name>
+  <description>
+    Sample application that demonstrates the usage of the clustered-jruby TIM.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.jruby</groupId>
+      <artifactId>jruby-complete</artifactId>
+      <version>1.1.5</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.terracotta.maven.plugins</groupId>
+        <artifactId>tc-maven-plugin</artifactId>
+        <version>${tc-maven-plugin.version}</version>
+        <configuration>
+          <workingDirectory>${project.build.directory}</workingDirectory>
+          <activeNodes>setVariable,getVariable</activeNodes>
+          <startServer>true</startServer>
+          <processes>
+            <process nodeName="setVariable" count="1" arguments="-e $shared=123">
+              <className>org.jruby.Main</className>
+            </process>
+            <process nodeName="getVariable" count="1" arguments="-e puts($shared)">
+              <className>org.jruby.Main</className>
+            </process>
+          </processes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <repositories>
+    <repository>
+      <id>terracotta-repository</id>
+      <url>http://www.terracotta.org/download/reflector/maven2</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+</project>

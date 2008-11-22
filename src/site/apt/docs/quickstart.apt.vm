@@ -1,0 +1,67 @@
+Quickstart Guide
+
+	The {{{installation.html}Install Guide}} has instructions on how to install this Integration Module.
+
+* Using a Terracotta Integration Module
+
+	To use an Integration Module you will need to tell Terracotta where it should look. This varies slightly
+	depending on where you installed your Integration Module.
+
+** Using a TIM Installed in the Local Maven Repository
+
+	If you are using the {{{http://forge.terracotta.org/projects/tc-maven-plugin} Maven Plugin for Terracotta}} then you wont
+	need to do anything.
+
+	If not, then you will have to add a <<<\<repository/\>>>> section in your <<<tc-config.xml>>> file to tell
+	Terracotta where it can find these modules:
+
+---
+<clients>
+   <modules>
+      <repository>%(user.home)/.m2/repository</repository>
+      <module name="%{project.artifactId}"
+         version="${project.version}"
+         group-id="${project.groupId}"/>
+   </modules>
+</clients>
+---
+
+ 	--- assuming that your local Maven repository is at:
+
+---
+~/.m2/repository
+---
+
+** Using a TIM Installed in the Local Terracotta Installation
+
+	You don't need to do anything else. Terracotta will always look for Integration Modules in its
+	<<<modules>>> folder in addition to the other repositories that you list in your <<<tc-config.xml>>>
+	file.
+
+	You will still need to declare which Integration Module you would like to load on startup:
+
+---
+<clients>
+   <modules>
+      <module name="%{project.artifactId}"
+         version="${project.version}"
+         group-id="${project.groupId}"/>
+   </modules>
+</clients>
+---
+
+** Using a TIM Installed in an Arbitrary Location
+
+	You will have to add a <<<\<repository/\>>>> section in your <<<tc-config.xml>>> file to tell
+	Terracotta where it can find these modules:
+
+---
+<clients>
+   <modules>
+      <repository>%(user.home)/terracotta-modules</repository>
+      <module name="%{project.artifactId}"
+         version="${project.version}"
+         group-id="${project.groupId}"/>
+   </modules>
+</clients>
+---

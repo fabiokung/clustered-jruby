@@ -1,0 +1,514 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  All content copyright (c) 2008 Fabio Kung,
+  except as may otherwise be noted in a separate copyright notice.
+  All rights reserved.
+-->
+<xml-fragment>
+
+  <instrumented-classes>
+    <include>
+      <class-expression>org.jruby.internal.runtime.GlobalVariable</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.internal.runtime.ReadonlyAccessor</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.internal.runtime.ValueAccessor</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.internal.runtime.UndefinedAccessor</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.runtime.GlobalVariableAcessor</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyArgsFile*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyArray*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyBigDecimal*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyBignum*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyBinding*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyBoolean*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyClass*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyClassPathVariable*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyComparable*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyComplex*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyContinuation*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyDigest*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyDir*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyEnumerable*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyEnumerator*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyEtc*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyException*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyFile*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyFileStat*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyFileTest*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyFixnum*</class-expression> 
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyFloat*</class-expression>  
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyGC*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyGlobal*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyHash*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyIO*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyIconv*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyInstanceConfig</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyInteger*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyJRuby*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyKernel*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyLocalJumpError*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyMarshal*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyMatchData*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyMath*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyMethod*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyModule*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyNKF*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyNameError*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyNil*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyNoMethodError*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyNumeric*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyObject*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyObjectAdapter*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyObjectSpace*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyPrecision*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyProc*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyProcess*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyRange*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyRational*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyRegexp*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyRuntimeAdapter*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubySignal*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyString*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyStringIO</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyStringScanner*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyStruct*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubySymbol*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubySystemCallError*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubySystemExit*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyThread*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyThreadGroup*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyTime*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyUnboundMethod*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyYAML*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.RubyZlib*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.IncludedModuleWrapper*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.MetaClass*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.TopSelfFactory*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.NativeException*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.runtime..*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.exceptions.*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.ast.*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.parser.LocalStaticScope</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.parser.StaticScope</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.parser.BlockStaticScope</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.parser.EvalStaticScope</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.util.ByteList</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.util.KCode</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.internal.runtime.methods.*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.lexer.yacc.*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.javasupport.Java*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.java.proxies.*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.java.invokers.*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.java.addons.*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.javasupport.proxy.*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.ext.Readline*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.util.SunSignalFacade*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.util.io.OpenFile</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jruby.internal.runtime.RuntimeVariableAccessor</class-expression>
+    </include>
+    <include>
+      <class-expression>org.joni..*</class-expression>
+    </include>
+    <include>
+      <class-expression>org.jcodings..*</class-expression>
+    </include>
+  </instrumented-classes>
+
+  <transient-fields>
+    <field-name>org.jruby.RubyClass.runtime</field-name>
+    <field-name>org.jruby.RubyClass.allocator</field-name>
+    <field-name>org.jruby.RubyClass.marshal</field-name>
+    <field-name>org.jruby.RubyClass.subclasses</field-name>
+    <field-name>org.jruby.RubyModule.kindOf</field-name>
+    <field-name>org.jruby.RubyModule.includingHierarchies</field-name>
+    <field-name>org.jruby.RubyObject.dataStruct</field-name>
+    <field-name>org.jruby.RubyThread.threadImpl</field-name>
+    <field-name>org.jruby.RubyThread.threadService</field-name>
+    <field-name>org.jruby.runtime.CacheMap.mappings</field-name>
+    <field-name>org.jruby.MetaClass.attached</field-name>
+    <field-name>org.jruby.common.RubyWarnings.runtime</field-name>
+    <field-name>org.jruby.internal.runtime.GlobalVariable.runtime</field-name>
+    <field-name>org.jruby.internal.runtime.methods.DynamicMethod.callConfig</field-name>
+    <field-name>org.jruby.internal.runtime.methods.DefaultMethod.jitCompiledScript</field-name>
+    <field-name>org.jruby.internal.runtime.GlobalVariables.runtime</field-name>
+    <field-name>org.jruby.internal.runtime.RubyRunnable.runtime</field-name>
+    <field-name>org.jruby.internal.runtime.UndefinedAccessor.runtime</field-name>
+    <field-name>org.jruby.ext.JRubyPOSIXHandler.runtime</field-name>
+    <field-name>org.jruby.evaluator.ValueConverter.runtime</field-name>
+    <field-name>org.jruby.compiler.JITCompiler.ruby</field-name>
+    <field-name>org.jruby.compiler.yarv.StandardYARVCompiler.runtime</field-name>
+    <field-name>org.jruby.ast.executable.YARVCompiledRunner.runtime</field-name>
+    <field-name>org.jruby.javasupport.JavaSupport.runtime</field-name>
+    <field-name>org.jruby.javasupport.proxy.JavaProxyClass.runtimeTLS</field-name>
+    <field-name>org.jruby.management.BeanManager.ruby</field-name>
+    <field-name>org.jruby.management.ClassCache.ruby</field-name>
+    <field-name>org.jruby.management.Config.ruby</field-name>
+    <field-name>org.jruby.management.ParserStats.ruby</field-name>
+    <field-name>org.jruby.parser.Parser.runtime</field-name>
+    <field-name>org.jruby.runtime.GlobalVariable.runtime</field-name>
+    <field-name>org.jruby.runtime.ThreadContext.runtime</field-name>
+    <field-name>org.jruby.runtime.callback.InvocationCallbackFactory.runtime</field-name>
+    <field-name>org.jruby.runtime.load.LoadService.runtime</field-name>
+    <field-name>org.jruby.runtime.marshal.UnmarshalCache.runtime</field-name>
+    <field-name>org.jruby.util.ZlibDeflate.runtime</field-name>
+    <field-name>org.jruby.util.ZlibInflate.runtime</field-name>
+    <field-name>org.jruby.util.io.OpenFile.mainStream</field-name>
+    <field-name>org.jruby.util.io.OpenFile.pipeStream</field-name>
+    <field-name>org.jruby.util.io.ChannelStream.runtime</field-name>
+    <field-name>org.jruby.util.io.ChannelStream.descriptor</field-name>
+    <field-name>org.jruby.util.io.JRubyObjectInputStream.impl</field-name>
+    <field-name>org.jruby.yaml.JRubyConstructor.runtime</field-name>
+    <field-name>org.jruby.javasupport.JavaClass.proxyLock</field-name>
+    <field-name>org.jruby.TopSelfFactory$1.val$runtime</field-name>
+    <field-name>org.jruby.TopSelfFactory$2.val$runtime</field-name>
+    <field-name>org.jruby.TopSelfFactory$3.val$runtime</field-name>
+    <field-name>org.jruby.TopSelfFactory$4.val$runtime</field-name>
+    <field-name>org.jruby.RubyModule$4.val$runtime</field-name>
+    <field-name>org.jruby.RubyModule$5.val$runtime</field-name>
+    <field-name>org.jruby.javasupport.Java$5.val$runtime</field-name>
+    <field-name>org.jruby.javasupport.Java$6.val$runtime</field-name>
+    <field-name>org.jruby.util.SunSignalFacade$1.val$oldHandler</field-name>
+    <field-name>org.jruby.util.SunSignalFacade$JRubySignalHandler.runtime</field-name>
+  </transient-fields>
+
+  <locks>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.RubyObject.set*(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.RubyObject.variableTableFastStore(..)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.internal.runtime.ValueAccessor.setValue(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.internal.runtime.methods.DynamicMethod.set*(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.internal.runtime.methods.DefaultMethod.set*(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>int org.jruby.internal.runtime.methods.DefaultMethod.incrementCallCount()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.RubyArray.realloc(int)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.RubyArray.store(..)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.RubyArray.append(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.runtime.callsite.CachingCallSite.cacheAndCall(..)</method-expression>
+    </autolock>
+    <named-lock>
+      <lock-name>rubyThread</lock-name>
+      <method-expression>void org.jruby.RubyThreadGroup.addDirectly(*)</method-expression>
+    </named-lock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.internal.runtime.GlobalVariable.setAccessor(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.util.io.OpenFile.checkWritable(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.util.io.OpenFile.setWriteBuffered()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.util.io.OpenFile.setReadBuffered()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.RubyModule.set*(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.runtime.ThreadContext.*(..)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.javasupport.JavaClass.setupInterfaceModule(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>String org.jruby.RubyModule.getName()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.runtime.CallSite$InlineCachingCallSite.updateCacheEntry(..)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.runtime.Frame.clear()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.RubyMatchData.use()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.runtime.Frame.updateFrame*(..)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.runtime.Frame.lazyBackrefAndLastline()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.runtime.Frame.setBackRef(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.runtime.DynamicScope.getEvalScope()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.RubyProc.initialize(..)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.RubyException.initialize(..)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.parser.StaticScope.set*(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.parser.StaticScope.capture(int)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.ast.SymbolNode.getSymbol(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>String org.jruby.util.ByteList.toString()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.parser.StaticScope.determineModule()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.RubyHash.internalPut(*,*,*)</method-expression>
+    </autolock>
+    <autolock>
+      <method-expression>void org.jruby.RubyModule$Generation.update()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.runtime.CallSite$InlineCachingCallSite.removeCachedMethod()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.ast.FixnumNode.getFixnum(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.util.ByteList.hashCode()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.RubyString.strDup(*,*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.parser.StaticScope.growVariableNames(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.runtime.scope.ManyVarsDynamicScope.growIfNeeded()</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.runtime.scope.ManyVarsDynamicScope.setValue(..)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* org.jruby.runtime.scope.FourVarDynamicScope.setValue(..)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>* *.set*(*)</method-expression>
+    </autolock>
+    <autolock auto-synchronized="true">
+      <method-expression>void org.jruby.runtime.Block.escape()</method-expression>
+    </autolock>
+    <autolock>
+      <method-expression>void org.jruby.java.invokers.ConstructorInvoker.createJavaCallables(*)</method-expression>
+    </autolock>
+    <autolock>
+      <method-expression>void org.jruby.runtime.CacheMap.moduleIncluded(..)</method-expression>
+    </autolock>
+    <autolock>
+      <method-expression>void org.jruby.RubyObject.dataWrapStruct(*)</method-expression>
+    </autolock>
+  </locks>
+
+  <roots>
+    <root>
+      <field-name>org.jruby.internal.runtime.GlobalVariables.globalVariables</field-name>
+    </root>
+  </roots>
+ 
+</xml-fragment>

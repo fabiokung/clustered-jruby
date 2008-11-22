@@ -1,0 +1,66 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+
+  All content copyright (c) 2003-2008 Terracotta, Inc.,
+  except as may otherwise be noted in a separate copyright notice.
+  All rights reserved.
+
+-->
+<tc:tc-config xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xmlns:tc='http://www.terracotta.org/config' xsi:schemaLocation='http://www.terracotta.org/schema/terracotta-4.xsd'>
+  <!--Server is colocated with client and DSO is listening on
+  default port (9510).-->
+  <servers>
+    <server name='org.terracotta.modules.sample-hostname' host='%i'>
+      <data>%(user.home)/.terracotta/server-data/jmaglev.sample/%D</data>
+      <logs>%(user.home)/.terracotta/server-logs/jmaglev.sample/%D</logs>
+    </server>  
+    <update-check>
+      <enabled>true</enabled>
+    </update-check>
+  </servers>
+
+  <!--Configure DSO for 'development' mode;
+  See the Terracotta DSO Guide for additional information.-->
+  <system>
+    <configuration-model>development</configuration-model>
+  </system>
+
+  <!--Tell DSO where to put the generated client logs
+  See the Terracotta Configuration Guide and Reference for additional
+  information.-->
+  <clients>
+    <!--
+
+      Terracotta Integration Modules (TIM) allow sets of configuration elements to
+      be packaged together as a single, includable module within the Terracotta
+      configuration.
+
+      The catalog of available configuration modules will grow as new technologies
+      are integrated with Terracotta. Community-developed configuration modules are
+      also welcome and may be featured in the Forge.
+
+      The <modules/> configuration below shows how to use a TIM as well as specify
+      additional locations where TIM's may be found.
+
+      For more information visit: http://terracotta.org/confluence/display/integrations/Home
+
+    -->
+    <modules>
+      <module name='clustered-jruby' version='1.0.0-SNAPSHOT' group-id='com.fabiokung'/>
+    </modules>
+    <logs>%(user.home)/.terracotta/client-logs/jmaglev.sample/%D</logs>
+    <statistics>%(user.home)/.terracotta/client-statistics/jmaglev.sample/%D</statistics>
+  </clients>
+
+  <application>
+    <dso>
+      <!--Declaring a field of a class a root will make it available for all instances
+      of our app that runs via DSO-->
+      <roots>
+        <root>
+          <field-name>org.jruby.internal.runtime.GlobalVariables.globalVariables</field-name>
+        </root>
+      </roots>
+    </dso>
+  </application>
+</tc:tc-config>

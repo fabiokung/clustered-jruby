@@ -1,0 +1,25 @@
+Downloads
+
+	We've conveniently packaged the application and the source files into bite-sized
+	portions. 
+	
+	To ensure that you have the latest and greatest, you can checkout the project from 
+	our Subversion repository:	
+
+---
+$ svn checkout \
+  ${project.scm.url} \
+  ${project.artifactId}-${project.version}
+---
+
+*----------------------------------+-----------------------------------------------------+
+| binaries | {{{../downloads/${project.artifactId}-${project.version}-bin.zip}download}} |
+*----------+-----------------------------------------------------------------------------+
+| source   | {{{../downloads/${project.artifactId}-${project.version}-src.zip}download}} |
+*----------+-----------------------------------------------------------------------------+
+
+* Other Branches and Releases
+	
+	To download the packaged binaries and source for all of the other branches and releases,
+	visit the ${project.artifactId} project's {{{../../../downloads/${project.artifactId}}downloads}} 
+	page.

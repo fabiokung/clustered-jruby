@@ -1,0 +1,6 @@
+About ${project.name}
+
+	${project.description}
+
+	Go to the {{{quickstart.html}Quickstart Guide}} to get you up and running with
+	the project in the fewest-possible steps.

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+
+  All content copyright (c) 2003-2008 Terracotta, Inc.,
+  except as may otherwise be noted in a separate copyright notice.
+  All rights reserved.
+
+-->
+<faqs title="Frequently Asked Questions">
+    <part id="part01">
+        <faq id="faq01">
+            <question>
+                What is ${project.name}?
+            </question>
+            <answer>
+                ${project.description}
+            </answer>
+        </faq>
+    </part>
+</faqs>

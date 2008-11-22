@@ -1,0 +1,13 @@
+
+2.7 Release
+
+
+Documentation: http://www.terracotta.org/web/display/orgsite/Documentation
+Forums:        http://forums.terracotta.org/forums/forums/list.page
+Mailing Lists: http://lists.terracotta.org
+Support:       http://www.terracotta.org/confluence/display/orgsite/Support
+
+
+
+Copyright (c) 2008, Terracotta, Inc.
+http://www.terracotta.org

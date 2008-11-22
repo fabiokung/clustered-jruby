@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+
+  All content copyright (c) 2003-2008 Terracotta, Inc.,
+  except as may otherwise be noted in a separate copyright notice.
+  All rights reserved.
+
+-->
+<project>
+  <version position="left"/>
+  <body>
+    <menu name="${project.name}">
+      <item name="Introduction" href="index.html">
+        <item name="About" href="docs/about.html"/>
+        <item name="Quickstart Guide" href="docs/quickstart.html"/>
+        <item name="Install Guide" href="docs/installation.html"/>
+        <item name="Building" href="docs/building.html"/>
+        <item name="Downloads" href="docs/downloads.html"/>
+        <item name="FAQ" href="faq.html"/>
+      </item>
+    </menu>
+    <menu name="Reports" ref="reports" inherit="top"/>
+    <menu name="Modules" ref="modules" inherit="top"/>
+  </body>
+</project>
