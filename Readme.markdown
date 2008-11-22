@@ -7,7 +7,7 @@ Step-by-step to run the JMaglev demo
 
 2.  Long time waiting, because terracotta-2.7.1 (vanilla) and jruby-complete (patched) are bundled.
 
-3.  Enter the project directory:
+3.  Change to the project directory:
 
         cd clustered-jruby
 
@@ -17,7 +17,7 @@ Step-by-step to run the JMaglev demo
         
     (although `mvn package` is enough)
 
-5.  Enter the jmaglev demo directory:
+5.  Change to the jmaglev demo directory:
 
         cd jmaglev
     
@@ -25,9 +25,9 @@ Step-by-step to run the JMaglev demo
 
         lib/terracotta-2.7.1/bin/start-tc-server.sh
 
-7.  open another two terminals
+7.  Open another two terminals
 
-8.  run the simplified jirb inside them:
+8.  Run the simplified jirb inside them:
 
         cd clustered-jruby/jmaglev
         ./bin/jmaglev jmaglev.rb
